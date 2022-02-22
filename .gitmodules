@@ -1,0 +1,4 @@
+[submodule "TutorialProject/Plugins/AccelByteUe4Sdk"]
+	path = TutorialProject/Plugins/AccelByteUe4Sdk
+	url = https://github.com/AccelByte/accelbyte-unreal-sdk-plugin
+	branch = master
