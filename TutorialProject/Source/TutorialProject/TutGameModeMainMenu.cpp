@@ -4,7 +4,6 @@
 
 #include "TutGameModeMainMenu.h"
 #include "TutorialMenuHUD.h"
-#include "Api/AccelByteLobbyApi.h"
 #include "Core/AccelByteRegistry.h"
 
 ATutGameModeMainMenu::ATutGameModeMainMenu()

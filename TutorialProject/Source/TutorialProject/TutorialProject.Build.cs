@@ -10,6 +10,6 @@ public class TutorialProject : ModuleRules
 	
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore","AccelByteUe4Sdk", "UMG", "Slate", "SlateCore" });
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "Json", "OnlineSubsystem", "OnlineSubsystemSteam", "Steamworks", "http", "WebBrowserWidget" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "Json", "JsonUtilities", "OnlineSubsystem", "OnlineSubsystemSteam", "Steamworks", "http", "WebBrowserWidget" });
 	}
 }

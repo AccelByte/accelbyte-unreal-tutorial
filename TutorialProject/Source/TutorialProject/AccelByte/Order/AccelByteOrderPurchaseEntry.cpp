@@ -7,12 +7,11 @@
 #include "Api/AccelByteOrderApi.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
-#include "TutorialProject/TutorialProjectUtilities.h"
 #include "AccelByteOrder.h"
 #include "TutorialProject/TutorialMenuHUD.h"
-#include "TutorialProject/AccelByte/Statistic/AccelByteStatistic.h"
+#include "TutorialProject/TutorialProjectGameInstance.h"
+#include "TutorialProject/AccelByte/Statistic/AccelByteStatisticObject.h"
 #include "TutorialProject/AccelByte/Store/AccelByteStore.h"
-#include "TutorialProject/AccelByte/Wallet/AccelByteWallet.h"
 
 #define STAT_VC_SPENDING "vc-spending"
 
@@ -21,7 +20,11 @@ void UAccelByteOrderPurchaseEntry::NativeConstruct()
 	Super::NativeConstruct();
 
 	TutorialMenuHUD = Cast<ATutorialMenuHUD>(GetOwningPlayer()->GetHUD());
-	AccelByteStatistic = NewObject<UAccelByteStatistic>();
+	AccelByteAchievement = TutorialMenuHUD->GetAchievementMenu();
+	if (!AccelByteStatisticObject)
+	{
+		AccelByteStatisticObject = NewObject<UAccelByteStatisticObject>();
+	}
 	Btn_Purchase->OnClicked.AddUniqueDynamic(this, &UAccelByteOrderPurchaseEntry::OnClickPurchaseItem);
 }
 
@@ -49,12 +52,10 @@ void UAccelByteOrderPurchaseEntry::OnClickPurchaseItem()
 
 	FRegistry::Order.CreateNewOrder(
 		OrderRequest,
-		THandler<FAccelByteModelsOrderInfo>::CreateLambda(
+		THandler<FAccelByteModelsOrderInfo>::CreateWeakLambda(this, 
 			[this, OrderConfirmationMenu](const FAccelByteModelsOrderInfo& Response)
 			{
-				TutorialProjectUtilities::ShowLog(
-					ELogVerbosity::Log,
-					FString::Printf(TEXT("Success Order Item: %s"), *Response.OrderNo));
+				UE_LOG(LogTemp, Log, TEXT("Success Order Item: %s"), *Response.OrderNo);
 				
 				if(ItemInfo.RegionData[CurrencyIndex].CurrencyType == EAccelByteItemCurrencyType::REAL)
 				{
@@ -66,19 +67,24 @@ void UAccelByteOrderPurchaseEntry::OnClickPurchaseItem()
 					TMap<FString, int32> StatCode;
 					StatCode.Add(STAT_VC_SPENDING, Response.Price);
 					
-					AccelByteStatistic->IncrementUserStatistic(StatCode);
+					AccelByteStatisticObject->IncrementUserStatistic(
+						StatCode,
+						FVoidHandler::CreateWeakLambda(
+							this,
+							[this]()
+							{
+								UE_LOG(LogTemp, Warning, TEXT("[Order] Increment User Stat Success"));
+							}));
 					
 					TutorialMenuHUD->GetStoreMenu()->UpdateWallet();
 					OrderConfirmationMenu->SwitchPopUpWidget(EOrderPopUpType::PURCHASE_RESULT);
 				}
 			}
 		),
-		FErrorHandler::CreateLambda(
+		FErrorHandler::CreateWeakLambda(this, 
 			[this, OrderConfirmationMenu](int32 ErrorCode, const FString& ErrorMessage)
 			{
-				TutorialProjectUtilities::ShowLog(
-					ELogVerbosity::Log,
-					FString::Printf(TEXT("Failed Order Item: %s (%d)"), *ErrorMessage, ErrorCode));
+				UE_LOG(LogTemp, Error, TEXT("Failed Order Item: %s (%d)"), *ErrorMessage, ErrorCode);
 				OrderConfirmationMenu->OnPurchaseFailed(ErrorMessage);
 			}
 		)

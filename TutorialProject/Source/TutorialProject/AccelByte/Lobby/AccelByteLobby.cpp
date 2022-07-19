@@ -3,6 +3,8 @@
 // and restrictions contact your company contract manager.
 
 #include "AccelByteLobby.h"
+
+#include "AccelByteNotificationObject.h"
 #include "Api/AccelByteLobbyApi.h"
 #include "Api/AccelByteQos.h"
 #include "Core/AccelByteRegistry.h"
@@ -11,7 +13,6 @@
 #include "Components/TextBlock.h"
 #include "Components/ComboBoxString.h"
 #include "Components/SizeBox.h"
-#include "Kismet/KismetStringLibrary.h"
 #include "TutorialProject/TutorialMenuHUD.h"
 #include "TutorialProject/TutorialProjectGameInstance.h"
 #include "TutorialProject/TutorialProjectUtilities.h"
@@ -33,7 +34,10 @@ void UAccelByteLobby::NativeConstruct()
 	Btn_LeaveLobby->OnClicked.AddUniqueDynamic(TutorialMenuHUD, &ATutorialMenuHUD::CloseLobbyMenu);
 	Btn_FriendsManagement->OnClicked.AddUniqueDynamic(this, &UAccelByteLobby::OnClickedOpenFriendsManagement);
 	Btn_FindMatch->OnClicked.AddUniqueDynamic(this, &UAccelByteLobby::OnClickedOpenFindMatch);
+	Btn_RefreshLatencies->OnClicked.AddUniqueDynamic(this, &UAccelByteLobby::ResetRegion);
 	Cbs_Gamemode->OnSelectionChanged.AddUniqueDynamic(this, &UAccelByteLobby::OnGameModeChanged);
+
+	GetWorld()->GetTimerManager().SetTimer(MemberTimerHandle, this, &UAccelByteLobby::ResetRegion, RefreshTime, bNeedRefresh);
 }
 
 #pragma endregion
@@ -62,13 +66,13 @@ void UAccelByteLobby::OnGameModeChanged(FString SelectedItem, ESelectInfo::Type 
 void UAccelByteLobby::GetServerLatencies(const FGetServerLatencies& OnSuccess, const FErrorHandler& OnError)
 {
 	FRegistry::Qos.GetServerLatencies(
-		THandler<TArray<TPair<FString, float>>>::CreateLambda([OnSuccess](const TArray<TPair<FString, float>>& Result)
+		THandler<TArray<TPair<FString, float>>>::CreateWeakLambda(this, [OnSuccess](const TArray<TPair<FString, float>>& Result)
 			{
 				UE_LOG(LogTemp, Log, TEXT("Get Server Latencies Success! Count: %d"), Result.Num());
 
 				OnSuccess.ExecuteIfBound(Result);
 			}),
-		FErrorHandler::CreateLambda([OnError](int32 ErrorCode, const FString& ErrorMessage)
+		FErrorHandler::CreateWeakLambda(this, [OnError](int32 ErrorCode, const FString& ErrorMessage)
 			{
 				// Get Server Latencies Error
 				UE_LOG(LogTemp, Warning, TEXT("Failed retrieving Server Latencies. %d: %s"), ErrorCode, *ErrorMessage);
@@ -87,12 +91,12 @@ void UAccelByteLobby::ConnectToLobby()
 	FRegistry::Lobby.Connect();
 }
 
-void UAccelByteLobby::AddPartyChild(UAccelByteParty* PartyMenu)
+void UAccelByteLobby::AddPartyChild(UAccelByteParty* PartyMenu) const
 {
 	Sb_Party->AddChild(PartyMenu);
 }
 
-void UAccelByteLobby::AddChatChild(UAccelByteChat* ChatMenu)
+void UAccelByteLobby::AddChatChild(UAccelByteChat* ChatMenu) const
 {
 	Sb_Chat->AddChild(ChatMenu);
 }
@@ -113,7 +117,7 @@ void UAccelByteLobby::RemoveErrorFindMatch() const
 	Tb_FindMatchError->SetVisibility(ESlateVisibility::Collapsed);
 }
 
-void UAccelByteLobby::DisableMatchmakingComponents()
+void UAccelByteLobby::DisableMatchmakingComponents() const
 {
 	SetFindMatchEnabled(false);
 	SetFindMatchErrorVisibility(ESlateVisibility::Collapsed);
@@ -121,21 +125,19 @@ void UAccelByteLobby::DisableMatchmakingComponents()
 	SetGameModeComboBoxSelectedIndex(0);
 }
 
-void UAccelByteLobby::SetGameModeComboBoxEnabled(bool bIsComboBoxEnabled)
+void UAccelByteLobby::SetGameModeComboBoxEnabled(bool bIsComboBoxEnabled) const
 {
 	Cbs_Gamemode->SetIsEnabled(bIsComboBoxEnabled);
 }
 
-FString UAccelByteLobby::GetGameModeComboBoxSelectedOption()
+FString UAccelByteLobby::GetGameModeComboBoxSelectedOption() const
 {
 	return Cbs_Gamemode->GetSelectedOption();
 }
 
-int32 UAccelByteLobby::GetMaximumPartyMemberFromGameMode()
+int32 UAccelByteLobby::GetMaximumPartyMemberFromGameMode() const
 {
-	const int32 MaximumMember = Cbs_Gamemode->GetSelectedIndex() + 1;
-
-	return MaximumMember;
+	return Cbs_Gamemode->GetSelectedIndex() + 1;
 }
 
 TPair<FString, float> UAccelByteLobby::GetSelectedLatency() const
@@ -145,46 +147,70 @@ TPair<FString, float> UAccelByteLobby::GetSelectedLatency() const
 
 void UAccelByteLobby::SetLobbyNotificationDelegate()
 {
-	FRegistry::Lobby.SetConnectSuccessDelegate(FSimpleDelegate::CreateLambda([this]()
+	FRegistry::Lobby.SetConnectSuccessDelegate(FSimpleDelegate::CreateWeakLambda(this, [this]()
+	{
+		UE_LOG(LogTemp, Log, TEXT("Successfully Connected to Lobby"));
+
+		FRegistry::Lobby.SendSetPresenceStatus(Availability::Availabe, "Online");
+
+		TutorialMenuHUD->GetPartyMenu()->SetCreatePartyButtonEnabled(true);
+		TutorialMenuHUD->GetPartyMenu()->RefreshPartyEntries();
+
+		TutorialMenuHUD->GetChatMenu()->JoinDefaultChannel();
+	}));
+
+	FRegistry::Lobby.SetConnectFailedDelegate(FErrorHandler::CreateWeakLambda(this, [](int32 Code, const FString& Message)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Failed Connect to Lobby : Code: %d; Message: %s"), Code, *Message);
+	}));
+
+	FRegistry::Lobby.SetErrorNotifDelegate(FErrorHandler::CreateWeakLambda(this, [](int32 Code, const FString& Message)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Error Connect to Lobby : Code: %d; Message: %s"), Code, *Message);
+	}));
+
+	FRegistry::Lobby.SetConnectionClosedDelegate(Api::Lobby::FConnectionClosed::CreateWeakLambda(this, [this](int32 StatusCode, const FString& Reason, bool bWasClean)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Connection Closed, Code: %d Reason: %s Clean: %s"), StatusCode, *Reason, bWasClean ? TEXT("true") : TEXT("false"));
+		
+		TutorialMenuHUD->OnCloseLobbyMenu();
+		TutorialMenuHUD->GetChatMenu()->DeleteTabButtonWidget(EChatTabType::Global);
+	}));
+
+	FRegistry::Lobby.SetDisconnectNotifDelegate(Api::Lobby::FDisconnectNotif::CreateWeakLambda(this, [this](const FAccelByteModelsDisconnectNotif& Result)
+	{
+		UE_LOG(LogTemp, Log, TEXT("Disconnected from Lobby"));
+		
+		TutorialMenuHUD->OnCloseLobbyMenu();
+	}));
+
+    //TODO deprecate code duplication in ATutPlayerControllerCountGame::BeginPlay()
+	FRegistry::Lobby.SetMessageNotifDelegate(THandler<FAccelByteModelsNotificationMessage>::CreateWeakLambda(this, [this](FAccelByteModelsNotificationMessage Result)
+	{
+		if (Result.Topic == TutorialProjectUtilities::RewardNotificationTopic)
 		{
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Successfully Connected to Lobby"));
-
-			FRegistry::Lobby.SendSetPresenceStatus(Availability::Availabe, "Online");
-
-			TutorialMenuHUD->GetPartyMenu()->SetCreatePartyButtonEnabled(true);
-			TutorialMenuHUD->GetPartyMenu()->RefreshPartyEntries();
-
-			TutorialMenuHUD->GetChatMenu()->JoinDefaultChannel();
-		}));
-
-	FRegistry::Lobby.SetConnectFailedDelegate(FErrorHandler::CreateLambda([](int32 Code, const FString& Message)
-		{
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Error Connect to Lobby : Code: %d; Message: %s"), Code, *Message));
-		}));
-
-	FRegistry::Lobby.SetErrorNotifDelegate(FErrorHandler::CreateLambda([](int32 Code, const FString& Message)
-		{
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Error Connect to Lobby : Code: %d; Message: %s"), Code, *Message));
-		}));
-
-	FRegistry::Lobby.SetConnectionClosedDelegate(Lobby::FConnectionClosed::CreateLambda([this](int32 StatusCode, const FString& Reason, bool bWasClean)
-		{
-			TutorialMenuHUD->OnCloseLobbyMenu();
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Connection Closed, Code: %d Reason: %s Clean: %s"), StatusCode, *Reason, *UKismetStringLibrary::Conv_BoolToString(bWasClean)));
-		}));
-
-	FRegistry::Lobby.SetDisconnectNotifDelegate(Lobby::FDisconnectNotif::CreateLambda([this](const FAccelByteModelsDisconnectNotif& Result)
-		{
-			TutorialMenuHUD->OnCloseLobbyMenu();
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Disconnected from Lobby"));
-		}));
+			UAccelByteNotificationObject* AccelByteNotificationObject = NewObject<UAccelByteNotificationObject>();
+			check(AccelByteNotificationObject);
+			AccelByteNotificationObject->InitRewardNotification(Result, FOnInitRewardSuccess::CreateWeakLambda(this, [this](const FRewardNotifInfo& Result)
+			{
+				UTutorialProjectGameInstance* TutorialProjectGameInstance = Cast<UTutorialProjectGameInstance>(UGameplayStatics::GetGameInstance(GetWorld()));
+				check(TutorialProjectGameInstance);
+					
+				TutorialProjectGameInstance->GetAchievementPopUp()->InitPopUpAchievement(Result.AchievementCode, Result.RewardItemIds, Result.CurrencyAmounts);
+			}), FOnInitRewardError::CreateWeakLambda(this, [](const FString& ErrorMessage)
+			{
+				// Do something when initiate the reward is error
+			}));
+		}
+	}));
 }
 
 void UAccelByteLobby::ResetRegion()
 {
-	GetServerLatencies(FGetServerLatencies::CreateLambda([this](const TArray<TPair<FString, float>>& Latencies)
+	GetServerLatencies(
+		FGetServerLatencies::CreateWeakLambda(this, [this](const TArray<TPair<FString, float>>& Latencies)
 		{
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Qos| Get Server Latencies Success"));
+			UE_LOG(LogTemp, Log, TEXT("Qos| Get Server Latencies Success"));
 
 			AvailableLatencies = Latencies;
 
@@ -234,11 +260,10 @@ void UAccelByteLobby::ResetRegion()
 
 			Cbs_Region->SetSelectedIndex(0);
 		}),
-
-		FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
-			{
-				TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString::Printf(TEXT("Qos| Error Get Server Latencies, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage));
-			}));
+		FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
+		{
+			UE_LOG(LogTemp, Error, TEXT("Qos| Error Get Server Latencies, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
+		}));
 }
 
 void UAccelByteLobby::SetFindMatchErrorVisibility(const ESlateVisibility& IsVisibility) const

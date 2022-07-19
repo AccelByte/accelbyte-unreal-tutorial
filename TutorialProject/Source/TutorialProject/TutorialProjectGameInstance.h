@@ -5,6 +5,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "AccelByte/Achievement/AccelByteAchievementPopUp.h"
 #include "AccelByte/Server/AccelByteServerManager.h"
 #include "Engine/GameInstance.h"
 #include "TutorialProjectGameInstance.generated.h"
@@ -34,15 +35,31 @@ class TUTORIALPROJECT_API UTutorialProjectGameInstance : public UGameInstance
 	virtual void Init() override;
 	
 	virtual void Shutdown() override;
+
+public:
 	
 	/**
-	* @brief Login to Game Server.
-	*/
-	void GameServerLogin();
+	 * @brief Getter for Achievement Pop Up Box widget
+	 */
+	UAccelByteAchievementPopUp* GetAchievementPopUp() const;
 
+protected:
+	
 	/**
 	* @brief Accessing Server Manager wrapper.
 	*/
 	UPROPERTY()
 	UAccelByteServerManager* ServerManager;
+
+	/**
+	 * @brief Pointer to Achievement Pop Up Box Widget
+	 */
+	UPROPERTY()
+	UAccelByteAchievementPopUp* AccelByteAchievementPopUp;
+
+	/**
+	 * @brief Getter for Achievement Pop Up Box Class
+	 */
+	UPROPERTY(EditDefaultsOnly)
+	TSubclassOf<UAccelByteAchievementPopUp> AccelByteAchievementPopUpClass;
 };

@@ -5,7 +5,6 @@
 #include "AccelByteStoreItemEntry.h"
 #include "TutorialProject/TutorialProjectUtilities.h"
 #include "Models/AccelByteEcommerceModels.h"
-
 #include "Components/Button.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
@@ -26,29 +25,15 @@ void UAccelByteStoreItemEntry::LoadInfo(const FAccelByteModelsItemInfo& Info)
 	T_ItemName->SetText(FText::FromString(ItemEntryInfo.Name));
 	T_ItemDescription->SetText(FText::FromString(ItemEntryInfo.Description));
 
-
-	FCacheBrush CacheItemBrush = TutorialProjectUtilities::GetImageFromCache(TutorialProjectUtilities::DefaultImage);
-	FString StoreItemImageId;
-	if (ItemEntryInfo.Images.Num() > 0)
+	if (Info.Tags.Num() > 0)
 	{
-		StoreItemImageId = FBase64::Encode(ItemEntryInfo.Images[0].SmallImageUrl);
-		CacheItemBrush = TutorialProjectUtilities::GetImageFromCache(StoreItemImageId);
-	}
-	
-	if (CacheItemBrush.IsValid())
-	{
-		Img_ItemImage->SetBrush(*CacheItemBrush.Get());
-	}
-	else
-	{
-		StoreItemImageId = FBase64::Encode(ItemEntryInfo.Images[0].SmallImageUrl);
-		const FString StoreItemImageUrl = ItemEntryInfo.Images[0].SmallImageUrl;
-		TutorialProjectUtilities::GetImageFromURL(
-			StoreItemImageUrl,
-			StoreItemImageId,
-			FOnImageReceived::CreateLambda([this](const FCacheBrush StoreImageResult){
-					Img_ItemImage->SetBrush(*StoreImageResult.Get());
-			}));
+		// Tags 0 means the item id to get the image from cache folder
+		const FString ItemTagId = Info.Tags[0] + ".png";
+		const FCacheBrush Brush = TutorialProjectUtilities::GetImageFromCache(ItemTagId);
+		if (Brush.IsValid())
+		{
+			Img_ItemImage->SetBrush(*Brush.Get());
+		}
 	}
 
 	const FString CurrencyCode = ItemEntryInfo.RegionData[0].CurrencyCode;

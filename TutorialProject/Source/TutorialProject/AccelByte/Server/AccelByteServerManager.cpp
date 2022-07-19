@@ -9,6 +9,7 @@
 #include "GameServerApi/AccelByteServerDSMApi.h"
 #include "GameServerApi/AccelByteServerMatchmakingApi.h"
 #include "GameServerApi/AccelByteServerOauth2Api.h"
+#include "TutorialProject/TutorialProjectUtilities.h"
 
 bool UAccelByteServerManager::CheckCommandLineArgument(const FString& Argument)
 {
@@ -25,12 +26,12 @@ bool UAccelByteServerManager::CheckCommandLineArgument(const FString& Argument)
 
 void UAccelByteServerManager::LoginWithCredentials(const FLoginWithCredentialsSuccess& LoginWithCredentialsSuccess, const FSendFailedInfo& LoginWithCredentialsFailed)
 {
-	FRegistry::ServerOauth2.LoginWithClientCredentials(FVoidHandler::CreateLambda([LoginWithCredentialsSuccess]()
+	FRegistry::ServerOauth2.LoginWithClientCredentials(FVoidHandler::CreateWeakLambda(this, [LoginWithCredentialsSuccess]()
 	{
 		UE_LOG(LogTemp, Log, TEXT("Login With Credentials success"));
 
 		LoginWithCredentialsSuccess.ExecuteIfBound();
-	}), FErrorHandler::CreateLambda([LoginWithCredentialsFailed](int32 ErrorCode, const FString& ErrorMessage)
+	}), FErrorHandler::CreateWeakLambda(this, [LoginWithCredentialsFailed](int32 ErrorCode, const FString& ErrorMessage)
 	{
 		UE_LOG(LogTemp, Error, TEXT("Login With Credentials failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 
@@ -45,12 +46,12 @@ void UAccelByteServerManager::ForgetAllCredentials() const
 
 void UAccelByteServerManager::RegisterLocalServerToDSM(const FRegisterLocalServerToDSMSuccess& RegisterLocalServerToDsmSuccess, const FSendFailedInfo& RegisterLocalServerToDsmFailed)
 {
-	FRegistry::ServerDSM.RegisterLocalServerToDSM(FString("127.0.0.1"), 7777, FString::Printf(TEXT("localds-"), *FPlatformMisc::GetDeviceId()), FVoidHandler::CreateLambda([RegisterLocalServerToDsmSuccess]()
+	FRegistry::ServerDSM.RegisterLocalServerToDSM(TutorialProjectUtilities::LocalServerIpAddress, TutorialProjectUtilities::LocalServerPort, TutorialProjectUtilities::LocalServerName, FVoidHandler::CreateWeakLambda(this, [RegisterLocalServerToDsmSuccess]()
 	{
 		UE_LOG(LogTemp, Log, TEXT("Register Local Server to DSM success"));
 
 		RegisterLocalServerToDsmSuccess.ExecuteIfBound();
-	}), FErrorHandler::CreateLambda([RegisterLocalServerToDsmFailed](int32 ErrorCode, const FString& ErrorMessage)
+	}), FErrorHandler::CreateWeakLambda(this, [RegisterLocalServerToDsmFailed](int32 ErrorCode, const FString& ErrorMessage)
 	{
 		UE_LOG(LogTemp, Error, TEXT("Register Local Server to DSM error, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 
@@ -60,12 +61,12 @@ void UAccelByteServerManager::RegisterLocalServerToDSM(const FRegisterLocalServe
 
 void UAccelByteServerManager::RegisterServerToDSM(const FRegisterServerToDSMSuccess& RegisterServerToDsmSuccess, const FSendFailedInfo& RegisterServerToDsmFailed)
 {
-	FRegistry::ServerDSM.RegisterServerToDSM(7777, FVoidHandler::CreateLambda([RegisterServerToDsmSuccess]()
+	FRegistry::ServerDSM.RegisterServerToDSM(TutorialProjectUtilities::ServerPort, FVoidHandler::CreateWeakLambda(this, [RegisterServerToDsmSuccess]()
 	{
 		UE_LOG(LogTemp, Log, TEXT("Register Server to DSM success"));
 
 		RegisterServerToDsmSuccess.ExecuteIfBound();
-	}), FErrorHandler::CreateLambda([RegisterServerToDsmFailed](int32 ErrorCode, const FString& ErrorMessage)
+	}), FErrorHandler::CreateWeakLambda(this, [RegisterServerToDsmFailed](int32 ErrorCode, const FString& ErrorMessage)
 	{
 		UE_LOG(LogTemp, Error, TEXT("Register Server to DSM error, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 
@@ -75,12 +76,12 @@ void UAccelByteServerManager::RegisterServerToDSM(const FRegisterServerToDSMSucc
 
 void UAccelByteServerManager::GetSessionId(const FGetSessionIdSuccess& GetSessionIdSuccess, const FSendFailedInfo& GetSessionIdError)
 {
-	FRegistry::ServerDSM.GetSessionId(THandler<FAccelByteModelsServerSessionResponse>::CreateLambda([GetSessionIdSuccess](const FAccelByteModelsServerSessionResponse& Result)
+	FRegistry::ServerDSM.GetSessionId(THandler<FAccelByteModelsServerSessionResponse>::CreateWeakLambda(this, [GetSessionIdSuccess](const FAccelByteModelsServerSessionResponse& Result)
 	{
 		UE_LOG(LogTemp, Log, TEXT("Get Session Id success"));
 
 		GetSessionIdSuccess.ExecuteIfBound(Result);
-	}), FErrorHandler::CreateLambda([GetSessionIdError](int32 ErrorCode, const FString& ErrorMessage)
+	}), FErrorHandler::CreateWeakLambda(this, [GetSessionIdError](int32 ErrorCode, const FString& ErrorMessage)
 	{
 		UE_LOG(LogTemp, Error, TEXT("Get Session Id error, Error Code: %d, Error Message: %s"), ErrorCode, *ErrorMessage);
 
@@ -95,12 +96,12 @@ void UAccelByteServerManager::SetMatchId(const FString& MatchId)
 
 void UAccelByteServerManager::QuerySessionStatus(const FQuerySessionStatusSuccess& QuerySessionStatusSuccess, const FSendFailedInfo& QuerySessionStatusError)
 {
-	FRegistry::ServerMatchmaking.QuerySessionStatus(FRegistry::ServerCredentials.GetMatchId(), THandler<FAccelByteModelsMatchmakingResult>::CreateLambda([QuerySessionStatusSuccess](const FAccelByteModelsMatchmakingResult& Result)
+	FRegistry::ServerMatchmaking.QuerySessionStatus(FRegistry::ServerCredentials.GetMatchId(), THandler<FAccelByteModelsMatchmakingResult>::CreateWeakLambda(this, [QuerySessionStatusSuccess](const FAccelByteModelsMatchmakingResult& Result)
 	{
 		UE_LOG(LogTemp, Log, TEXT("Query Session Status success"));
 
 		QuerySessionStatusSuccess.ExecuteIfBound(Result);
-	}), FErrorHandler::CreateLambda([QuerySessionStatusError](int32 ErrorCode, const FString& ErrorMessage)
+	}), FErrorHandler::CreateWeakLambda(this, [QuerySessionStatusError](int32 ErrorCode, const FString& ErrorMessage)
 	{
 		UE_LOG(LogTemp, Error, TEXT("Query Session Status error, Error Code: %d, Error Message: %s"), ErrorCode, *ErrorMessage);
 
@@ -110,12 +111,12 @@ void UAccelByteServerManager::QuerySessionStatus(const FQuerySessionStatusSucces
 
 void UAccelByteServerManager::DeregisterLocalServerFromDSM(const FDeregisterLocalServerFromDSMSuccess& DeregisterLocalServerFromDsmSuccess, const FSendFailedInfo& DeregisterLocalServerFromDsmError)
 {
-	FRegistry::ServerDSM.DeregisterLocalServerFromDSM(FString::Printf(TEXT("localds:%s"), *FPlatformMisc::GetDeviceId()), FVoidHandler::CreateLambda([DeregisterLocalServerFromDsmSuccess]()
+	FRegistry::ServerDSM.DeregisterLocalServerFromDSM(TutorialProjectUtilities::LocalServerName, FVoidHandler::CreateWeakLambda(this, [DeregisterLocalServerFromDsmSuccess]()
 	{
 		UE_LOG(LogTemp, Log, TEXT("Deregister Local Server from DSM success"))
 
 		DeregisterLocalServerFromDsmSuccess.ExecuteIfBound();
-	}), FErrorHandler::CreateLambda([DeregisterLocalServerFromDsmError](int32 ErrorCode, const FString& ErrorMessage)
+	}), FErrorHandler::CreateWeakLambda(this, [DeregisterLocalServerFromDsmError](int32 ErrorCode, const FString& ErrorMessage)
 	{
 		UE_LOG(LogTemp, Error, TEXT("Deregister Local Server from DSM error, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 
@@ -125,12 +126,13 @@ void UAccelByteServerManager::DeregisterLocalServerFromDSM(const FDeregisterLoca
 
 void UAccelByteServerManager::SendShutdownToDSM(const FSendShutDownToDSMSuccess& SendShutDownToDsmSuccess,	const FSendFailedInfo& SendShutdownToDsmError)
 {
-	FRegistry::ServerDSM.SendShutdownToDSM(true, FRegistry::ServerCredentials.GetMatchId(), FVoidHandler::CreateLambda([SendShutDownToDsmSuccess]()
+	// true = to shutdown the DS, false = if the DS has already shutdown
+	FRegistry::ServerDSM.SendShutdownToDSM(true, FRegistry::ServerCredentials.GetMatchId(), FVoidHandler::CreateWeakLambda(this, [SendShutDownToDsmSuccess]()
 	{
 		UE_LOG(LogTemp, Log, TEXT("Send Shutdown to DSM success"));
 
 		SendShutDownToDsmSuccess.ExecuteIfBound();
-	}), FErrorHandler::CreateLambda([SendShutdownToDsmError](int32 ErrorCode, const FString& ErrorMessage)
+	}), FErrorHandler::CreateWeakLambda(this, [SendShutdownToDsmError](int32 ErrorCode, const FString& ErrorMessage)
 	{
 		UE_LOG(LogTemp, Error, TEXT("Send Shutdown to DSM error, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 
@@ -147,4 +149,65 @@ UAccelByteServerManager* UAccelByteServerManager::CreateAccelByteServer(UGameIns
 FString UAccelByteServerManager::GetMatchId() const
 {
 	return FRegistry::ServerCredentials.GetMatchId();
+}
+
+void UAccelByteServerManager::ShutDown()
+{
+	if (CheckCommandLineArgument(TutorialProjectUtilities::LaunchArgsLocalDS))
+	{
+		DeregisterLocalServerFromDSM(FDeregisterLocalServerFromDSMSuccess::CreateWeakLambda(this, []()
+		{
+			UE_LOG(LogTemp, Log, TEXT("Successfully DeregisterLocalServerFromDSM"));
+		}),
+		FSendFailedInfo::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
+		{
+			UE_LOG(LogTemp, Error, TEXT("Error DeregisterLocalServerFromDSM : Code: %d, Reason: %s"), ErrorCode, *ErrorMessage);
+		}));
+	}
+	else
+	{
+		SendShutdownToDSM(FSendShutDownToDSMSuccess::CreateWeakLambda(this, []()
+		{
+			UE_LOG(LogTemp, Log, TEXT("Successfully DeregisterLocalServerFromDSM"));
+		}),
+		FSendFailedInfo::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
+		{
+			UE_LOG(LogTemp, Error, TEXT("Error DeregisterLocalServerFromDSM : Code: %d, Reason: %s"), ErrorCode, *ErrorMessage);
+		}));
+	}
+
+	ForgetAllCredentials();
+}
+
+void UAccelByteServerManager::GameServerLogin()
+{
+	LoginWithCredentials(FLoginWithCredentialsSuccess::CreateWeakLambda(this, [this]()
+		{
+			if (CheckCommandLineArgument(TutorialProjectUtilities::LaunchArgsLocalDS))
+			{
+				RegisterLocalServerToDSM(FRegisterLocalServerToDSMSuccess::CreateWeakLambda(this, []()
+					{
+						UE_LOG(LogTemp, Log, TEXT("Local Server Running"));
+					}),
+					FSendFailedInfo::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
+						{
+							UE_LOG(LogTemp, Error, TEXT("Local Server Failed Error %i Message %s"), ErrorCode, *ErrorMessage);
+						}));
+			}
+			else
+			{
+				RegisterServerToDSM(FRegisterServerToDSMSuccess::CreateWeakLambda(this, []()
+					{
+						UE_LOG(LogTemp, Log, TEXT("Successfully Registered Server to DSM"));
+					}),
+					FSendFailedInfo::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
+						{
+							UE_LOG(LogTemp, Error, TEXT("Error RegisterServerToDSM : Code: %d, Reason: %s"), ErrorCode, *ErrorMessage);
+						}));
+			}
+		}),
+		FSendFailedInfo::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
+			{
+				UE_LOG(LogTemp, Error, TEXT("Error LoginWithCredentials : Code: %d, Reason: %s"), ErrorCode, *ErrorMessage);
+			}));
 }

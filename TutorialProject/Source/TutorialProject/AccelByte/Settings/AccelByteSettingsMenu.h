@@ -16,8 +16,8 @@ struct FGameSettings
 {
 	GENERATED_BODY()
 
-	int32 DisplayMode;
-	int32 CloudSaveState;
+	EWindowMode::Type DisplayMode = EWindowMode::Windowed;
+	bool bCloudSaveState = false;
 };
 
 /**
@@ -186,7 +186,7 @@ protected:
 	/**
 	 * @brief Init current display settings.
 	 */
-	void InitDisplaySettings(const int DisplayModeIndex);
+	void InitDisplaySettings(const EWindowMode::Type& WindowMode);
 
 	/**
 	 * @brief Show or hide popup based on Pop up type.

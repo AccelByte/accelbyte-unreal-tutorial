@@ -5,6 +5,17 @@
 #include "TutorialProject/AccelByte/Wallet/AccelByteWallet.h"
 #include "AccelByteEntitlement.generated.h"
 
+USTRUCT()
+struct FPlayerEquipment
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString EquippedItem;
+	UPROPERTY()
+	FString UsedItem;
+};
+
 class ATutorialMenuHUD;
 class UGridPanel;
 class UWidgetSwitcher;
@@ -37,6 +48,7 @@ class TUTORIALPROJECT_API UAccelByteEntitlement : public UUserWidget
 	/**
 	 * @brief This to handle reference of HUD framework
 	 */
+	UPROPERTY()
 	ATutorialMenuHUD* TutorialMenuHUD;
 
 	/**
@@ -44,6 +56,8 @@ class TUTORIALPROJECT_API UAccelByteEntitlement : public UUserWidget
 	 */
 	UPROPERTY(EditDefaultsOnly) 
 	int32 MaximumGridColumn;
+
+	void QueryEntitlements(const FPlayerEquipment& PlayerEquipment);
 	
 public:
 	

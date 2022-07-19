@@ -1,4 +1,4 @@
-// Copyright (c) 2021 AccelByte Inc. All Rights Reserved.
+// Copyright (c) 2021 - 2022 AccelByte Inc. All Rights Reserved.
 // This is licensed software from AccelByte Inc, for limitations
 // and restrictions contact your company contract manager.
 
@@ -9,6 +9,7 @@
 #include "AccelByte/Entitlement/AccelByteEntitlement.h"
 #include "AccelByte/Friends/AccelbyteFindFriend.h"
 #include "AccelByte/Friends/AccelByteFriends.h"
+#include "AccelByte/Leaderboard/AccelByteLeaderboard.h"
 #include "AccelByte/Legal/AccelByteLegalDocument.h"
 #include "AccelByte/Party/AccelByteParty.h"
 #include "AccelByte/Matchmaking/AccelByteMatchmaking.h"
@@ -17,6 +18,8 @@
 #include "AccelByte/Settings/AccelByteSettingsMenu.h"
 #include "AccelByte/Wallet/AccelByteWallet.h"
 #include "AccelByte/Order/AccelByteOrder.h"
+#include "AccelByte/UserProfile/AccelByteUserProfile.h"
+#include "AccelByte/Achievement/AccelByteAchievement.h"
 
 void ATutorialMenuHUD::BeginPlay()
 {
@@ -40,6 +43,8 @@ void ATutorialMenuHUD::BeginPlay()
 	check(SettingsMenuClass != nullptr);
 	check(WalletClass != nullptr);
 	check(OrderConfirmationClass != nullptr);
+	check(LeaderboardMenuClass != nullptr);
+	check(AchievementMenuClass != nullptr);
 	
 	LoginMenu = CreateWidget<UAccelByteAuth>(PlayerController, LoginMenuClass.Get());
 	LegalMenu = CreateWidget<UAccelByteLegalDocument>(PlayerController, LegalMenuClass.Get());
@@ -55,8 +60,11 @@ void ATutorialMenuHUD::BeginPlay()
 	FindMatchmakingMenu = CreateWidget<UAccelByteFindMatchPopUp>(PlayerController, FindMatchmakingClass.Get());
 	StoreMenu = CreateWidget<UAccelByteStore>(PlayerController, StoreMenuClass.Get());
 	SettingsMenu = CreateWidget<UAccelByteSettingsMenu>(PlayerController, SettingsMenuClass.Get());
+	UserProfileMenu = CreateWidget<UAccelByteUserProfile>(PlayerController, UserProfileClass.Get());
 	WalletMenu = CreateWidget<UAccelByteWallet>(PlayerController, WalletClass.Get());
 	OrderConfirmationMenu = CreateWidget<UAccelByteOrder>(PlayerController, OrderConfirmationClass.Get());
+	LeaderboardMenu = CreateWidget<UAccelByteLeaderboard>(PlayerController, LeaderboardMenuClass.Get());
+	AchievementMenu = CreateWidget<UAccelByteAchievement>(PlayerController, AchievementMenuClass.Get());
 
 	if (!FRegistry::Credentials.GetUserId().IsEmpty())
 	{
@@ -93,12 +101,25 @@ void ATutorialMenuHUD::InitMainMenu()
 
 void ATutorialMenuHUD::InitLegal()
 {
-	LegalMenu->InitLegal();
+	// Checking player is eligible for legal or not
+	if (FRegistry::Credentials.GetAuthToken().Is_comply) 
+	{
+		InitGameSettings();
+	}
+	else 
+	{
+		LegalMenu->InitLegal();
+	}
 }
 
 void ATutorialMenuHUD::InitGameSettings()
 {
 	SettingsMenu->InitGameSettings();
+}
+
+void ATutorialMenuHUD::InitUserProfile()
+{
+	UserProfileMenu->InitUserProfile();
 }
 
 void ATutorialMenuHUD::OpenLobbyMenu()
@@ -122,7 +143,7 @@ void ATutorialMenuHUD::OpenGalleryMenu()
 
 void ATutorialMenuHUD::OpenMatchmakingMenu()
 {
-	LobbyMenu->RemoveFromParent();
+	LobbyMenu->SetVisibility(ESlateVisibility::Collapsed);
 	MatchmakingMenu->AddToViewport();
 }
 
@@ -133,7 +154,15 @@ void ATutorialMenuHUD::OpenFindMatchmakingPopUp()
 
 void ATutorialMenuHUD::OpenFriendsMenu()
 {
-	FriendsMenu->AddToViewport();
+	if (!FriendsMenu->IsInViewport())
+	{
+		FriendsMenu->AddToViewport();
+	}
+	else
+	{
+		FriendsMenu->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		FriendsMenu->RefreshFriendsList();
+	}
 }
 
 void ATutorialMenuHUD::OpenFindFriendsMenu()
@@ -151,6 +180,17 @@ void ATutorialMenuHUD::OpenOrderConfirmationPopUp(const FAccelByteModelsItemInfo
 {
 	OrderConfirmationMenu->AddToViewport();
 	OrderConfirmationMenu->InitPopUp(ItemInfo);
+}
+
+void ATutorialMenuHUD::OpenLeaderboardMenu()
+{
+	LeaderboardMenu->AddToViewport();
+	LeaderboardMenu->ResetWidget();
+}
+
+void ATutorialMenuHUD::OpenAchievementMenu()
+{
+	AchievementMenu->AddToViewport();
 }
 
 void ATutorialMenuHUD::CloseMainMenu()
@@ -188,7 +228,7 @@ void ATutorialMenuHUD::CloseFriendMenu()
 	{
 		LobbyMenu->AddToViewport();
 	}
-	FriendsMenu->RemoveFromParent();
+	FriendsMenu->SetVisibility(ESlateVisibility::Collapsed);
 }
 
 void ATutorialMenuHUD::CloseSettingsMenu()
@@ -224,4 +264,22 @@ void ATutorialMenuHUD::CloseStoreMenu()
 		MainMenu->AddToViewport();
 	}
 	StoreMenu->RemoveFromParent();
+}
+
+void ATutorialMenuHUD::CloseLeaderboardMenu()
+{
+	if (!MainMenu->IsInViewport())
+	{
+		MainMenu->AddToViewport();
+	}
+	LeaderboardMenu->RemoveFromParent();
+}
+
+void ATutorialMenuHUD::CloseAchievementMenu()
+{
+	if (!MainMenu->IsInViewport())
+	{
+		MainMenu->AddToViewport();
+	}
+	AchievementMenu->RemoveFromParent();
 }

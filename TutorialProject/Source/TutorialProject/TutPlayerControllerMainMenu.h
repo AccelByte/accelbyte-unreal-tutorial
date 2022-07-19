@@ -23,5 +23,4 @@ protected:
 	virtual void SetupInputComponent() override;
 
 	void OnScreenshotActionPressed();
-
 };

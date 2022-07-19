@@ -21,13 +21,27 @@ class UButton;
 * - Accept Party Invitation
 * - Reject Party Invitation
  */
-
 UCLASS()
 class TUTORIALPROJECT_API UAccelBytePartyInvitationPopUp : public UUserWidget
 {
 	GENERATED_BODY()
-
+	
+#pragma region Initialization
+	
 	virtual void NativeConstruct() override;
+	
+public:
+	
+	/**
+	* @brief Initialize ResultInvited data to get player response to party host.
+	*/
+	void InitData(const FAccelByteModelsPartyGetInvitedNotice& Result);
+	
+#pragma endregion
+
+#pragma region Widget Components
+	
+private:
 
 	/**
 	* @brief Text Box displaying Invitation.
@@ -47,13 +61,9 @@ class TUTORIALPROJECT_API UAccelBytePartyInvitationPopUp : public UUserWidget
 	UPROPERTY(meta = (BindWidget))
 	UButton* Btn_RejectParty;
 	
-public:
+#pragma endregion
 	
-	/**
-	* @brief Initialize ResultInvited data to get player response to party host.
-	*/
-	UFUNCTION()
-	void InitData(const FAccelByteModelsPartyGetInvitedNotice& Result);
+#pragma region Widget Callbacks
 	
 	/**
 	* @brief Callback for accepting party invitation.
@@ -66,27 +76,21 @@ public:
 	*/
 	UFUNCTION()
 	void OnClickedRejectPartyInvitation();
-
-	/**
-	* @brief Response when Player Accept the party Invitation.
-	*/
-	void OnInvitePartyAcceptResponse(const FAccelByteModelsPartyJoinReponse& Result);
 	
-	/**
-	* @brief Response when Reject the party invitation.
-	*/
-	void OnInvitePartyRejectResponse(const FAccelByteModelsPartyRejectResponse& Result);
+#pragma endregion
 
+#pragma region Utilities
+	
 	/**
 	* @brief Get Invitation notice data to pass player accepting / rejecting
 	* party invitation request.
 	*/
 	FAccelByteModelsPartyGetInvitedNotice InvitationData;
-
-private:
 	
 	/**
 	* @brief Tutorial Menu HUD to handle all functionality of the UI.
 	*/
 	ATutorialMenuHUD* TutorialMenuHUD;
+	
+#pragma endregion
 };

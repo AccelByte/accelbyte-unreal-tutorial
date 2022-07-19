@@ -11,18 +11,18 @@
 #include "AccelByteServerManager.generated.h"
 
 /**
-* Wrapper for Server Manager Code
+* Wrapper for DS Manager Code
 * This code covers AccelByte services including :
 *
 * - Login With Client Credentials
 * - Forget All Credentials
-* - Register Local Server to DSM
-* - Register Server to DSM
+* - Register Local DS to DSM
+* - Register DS to DSM
 * - Get Session ID
 * - Set Match ID
 * - Get Match ID
 * - Querry Session Status
-* - Deregister Local Server from DSM
+* - Deregister Local DS from DSM
 * - Send Shutdown to DSM
 */
 
@@ -33,11 +33,11 @@ class UGameInstance;
  */
 DECLARE_DELEGATE(FLoginWithCredentialsSuccess);
 /*
- * These are delegates to handle if Register Local Server to DSM is success or failed
+ * These are delegates to handle if Register Local DS to DSM is success or failed
  */
 DECLARE_DELEGATE(FRegisterLocalServerToDSMSuccess);
 /*
- * These are delegates to handle if Register Server to DSM is success or failed
+ * These are delegates to handle if Register DS to DSM is success or failed
  */
 DECLARE_DELEGATE(FRegisterServerToDSMSuccess);
 /*
@@ -49,7 +49,7 @@ DECLARE_DELEGATE_OneParam(FGetSessionIdSuccess, const FAccelByteModelsServerSess
  */
 DECLARE_DELEGATE_OneParam(FQuerySessionStatusSuccess, const FAccelByteModelsMatchmakingResult& MatchmakingResult);
 /*
- * These are delegates to handle if Deregister Local Server from DSM is success or error
+ * These are delegates to handle if Deregister Local DS from DSM is success or error
  */
 DECLARE_DELEGATE(FDeregisterLocalServerFromDSMSuccess);
 /*
@@ -68,7 +68,7 @@ class TUTORIALPROJECT_API UAccelByteServerManager : public UObject
 
 public:
 	/*
-	 * @brief Checking command line when server launched.
+	 * @brief Checking command line when DS launched.
 	 */
 	bool CheckCommandLineArgument(const FString& Argument);
 
@@ -83,12 +83,12 @@ public:
 	void ForgetAllCredentials() const;
 	
 	/*
-	 * @brief Registering Local Server to AccelByte Dedicated Server Manager.
+	 * @brief Registering Local DS to AccelByte Dedicated Server Manager.
 	 */
 	void RegisterLocalServerToDSM(const FRegisterLocalServerToDSMSuccess& RegisterLocalServerToDsmSuccess, const FSendFailedInfo& RegisterLocalServerToDsmFailed);
 
 	/*
-	 * @brief Registering Server to AccelByte Dedicated Server Manager.
+	 * @brief Registering DS to AccelByte Dedicated Server Manager.
 	 */
 	void RegisterServerToDSM(const FRegisterServerToDSMSuccess& RegisterServerToDsmSuccess, const FSendFailedInfo& RegisterServerToDsmFailed);
 
@@ -108,12 +108,12 @@ public:
 	void SetMatchId(const FString& MatchId);
 
 	/*
-	 * @brief Query Session Status i.g (party id, party member) that has been set up before game server logic.
+	 * @brief Query Session Status i.g (party id, party member) that has been set up before game DS logic.
 	 */
 	void QuerySessionStatus(const FQuerySessionStatusSuccess& QuerySessionStatusSuccess, const FSendFailedInfo& QuerySessionStatusError);
 
 	/*
-	 * @brief Deregister Local Server from Dedicated Server Manager when it's done being used to prevent
+	 * @brief Deregister Local DS from Dedicated Server Manager when it's done being used to prevent
 	 * bigger streamline budget when it's running.
 	 */
 	void DeregisterLocalServerFromDSM(const FDeregisterLocalServerFromDSMSuccess& DeregisterLocalServerFromDsmSuccess, const FSendFailedInfo& DeregisterLocalServerFromDsmError);
@@ -127,4 +127,14 @@ public:
 	* @brief Singleton UAccelByteServerManager class caller.
 	*/
 	static UAccelByteServerManager* CreateAccelByteServer(UGameInstance* GameInstance);
+
+	/*
+	* @brief ShutDown functions wrapper to be called inside game instance
+	*/
+	void ShutDown();
+
+	/*
+	* @brief GameServerLogin functions wrapper to be called inside game instance
+	*/
+	void GameServerLogin();
 };

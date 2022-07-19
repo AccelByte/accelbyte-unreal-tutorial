@@ -14,7 +14,7 @@
 void UAccelByteGallery::NativeConstruct()
 {
 	Super::NativeConstruct();
-
+	
 	Btn_BackToMainMenu->OnClicked.AddUniqueDynamic(this, &UAccelByteGallery::OnBackToMainMenuButtonClicked);
 }
 
@@ -26,39 +26,39 @@ void UAccelByteGallery::OnBackToMainMenuButtonClicked()
 
 void UAccelByteGallery::UpdateUserInterface()
 {
-	FRegistry::CloudStorage.GetSlot(ModelSlot.SlotId, THandler<TArray<uint8>>::CreateLambda([this](const TArray<uint8>& Result)
+	FRegistry::CloudStorage.GetSlot(ModelSlot.SlotId, THandler<TArray<uint8>>::CreateWeakLambda(this, [this](const TArray<uint8>& Result)
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Get Slot Success"));
+		UE_LOG(LogTemp, Log, TEXT("Get Slot Success"));
 
 		if (Result.Num() != 0)
 		{
 			const FString ResourceName = FPaths::ProjectSavedDir() / TutorialProjectUtilities::ResourcePathForSaveGalleryImage;
-			TutorialProjectUtilities::GetImageFromBytes(Result, ResourceName, FOnImageReceived::CreateLambda([this](const FCacheBrush Brush)
+			TutorialProjectUtilities::GetImageFromBytes(Result, ResourceName, FOnImageReceived::CreateWeakLambda(this, [this](const FCacheBrush Brush)
 			{
 				I_Screenshot->SetBrush(FSlateBrush{});
-				Tb_ScreenshotName->SetText(FText::FromString(FString("name: ") + ModelSlot.CustomAttribute));
-				I_Screenshot->SetBrush(*Brush.Get());
+				Tb_ScreenshotName->SetText(FText::FromString(FString("Picture Name: ") + ModelSlot.CustomAttribute));
+				I_Screenshot->SetBrush(*Brush.Get()); 
 			}));
 		}
 	}),
-	FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+	FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Get Slot Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage));
+		UE_LOG(LogTemp, Error, TEXT("Get Slot Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 	}));
 }
 
 void UAccelByteGallery::RefreshGallery()
 {
-	FRegistry::CloudStorage.GetAllSlots(THandler<TArray<FAccelByteModelsSlot>>::CreateLambda([this](const TArray<FAccelByteModelsSlot>& Result)
+	FRegistry::CloudStorage.GetAllSlots(THandler<TArray<FAccelByteModelsSlot>>::CreateWeakLambda(this, [this](const TArray<FAccelByteModelsSlot>& Result)
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Get All Slots Success"));
+		UE_LOG(LogTemp, Log, TEXT("Get All Slots Success"));
 		
 		FAccelByteModelsSlot Slot = {};
-		for (const FAccelByteModelsSlot& ModelSlot : Result)
+		for (const FAccelByteModelsSlot& CurrentSlot : Result)
 		{
-			if (ModelSlot.Label == TutorialProjectUtilities::GalleryLabel)
+			if (CurrentSlot.Label == TutorialProjectUtilities::GalleryLabel)
 			{
-				Slot = ModelSlot;
+				Slot = CurrentSlot;
 				break;
 			}
 		}
@@ -69,15 +69,15 @@ void UAccelByteGallery::RefreshGallery()
 			UpdateUserInterface();
 		}
 	}),
-	FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+	FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Get All Slots Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage));
+		UE_LOG(LogTemp, Error, TEXT("Get All Slots Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 	}));
 }
 
 void UAccelByteGallery::TakeScreenshot()
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Take a Screenshot"));
+	UE_LOG(LogTemp, Log, TEXT("Take a Screenshot"));
 
 	const FString FileName = FDateTime::Now().ToString();
 	const FString FullFileName = FPaths::ProjectSavedDir() + "Screenshots/" + FileName + ".png";
@@ -88,23 +88,25 @@ void UAccelByteGallery::TakeScreenshot()
 		TArray<uint8> BinaryData;
 		if (FFileHelper::LoadFileToArray(BinaryData, *FullFileName))
 		{
-			const THandler<FAccelByteModelsSlot> OnSuccess = THandler<FAccelByteModelsSlot>::CreateLambda([this](const FAccelByteModelsSlot& Result)
+			const THandler<FAccelByteModelsSlot> OnSuccess = THandler<FAccelByteModelsSlot>::CreateWeakLambda(this, [this](const FAccelByteModelsSlot& Result)
 			{
-				TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Create or Update Slot Success"));
+				UE_LOG(LogTemp, Log, TEXT("Create or Update Slot Success"));
+
+				ModelSlot = Result;
 
 				UpdateUserInterface();
 			});
-			const FHttpRequestProgressDelegate OnProgress = FHttpRequestProgressDelegate::CreateLambda([](FHttpRequestPtr Request, int32 BytesSent, int32 BytesReceieved)
+			const FHttpRequestProgressDelegate OnProgress = FHttpRequestProgressDelegate::CreateWeakLambda(this, [](FHttpRequestPtr Request, int32 BytesSent, int32 BytesReceieved)
 			{
-				TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString::Printf(TEXT("Upload progress : %d / %d"), BytesSent, Request->GetContentLength()));
+				UE_LOG(LogTemp, Log, TEXT("Upload progress : %d / %d"), BytesSent, Request->GetContentLength());
 			});
-			const FErrorHandler OnCreateSlotError = FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+			const FErrorHandler OnCreateSlotError = FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 			{
-				TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Create Slot Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage));
+				UE_LOG(LogTemp, Error, TEXT("Create Slot Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 			});
-			const FErrorHandler OnUpdateSlotError = FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+			const FErrorHandler OnUpdateSlotError = FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 			{
-				TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Update Slot Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage));
+				UE_LOG(LogTemp, Error, TEXT("Update Slot Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 			});
 			
 			if (ModelSlot.Label == TutorialProjectUtilities::GalleryLabel)

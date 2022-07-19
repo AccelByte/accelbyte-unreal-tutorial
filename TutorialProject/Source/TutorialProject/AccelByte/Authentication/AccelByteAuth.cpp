@@ -8,10 +8,10 @@
 #include "Core/AccelByteRegistry.h"
 #include "OnlineSubsystem.h"
 #include "Interfaces/OnlineIdentityInterface.h"
-#include "Kismet/KismetStringLibrary.h"
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/EditableTextBox.h"
+#include "Components/TextBlock.h"
 #include "TutorialProject/TutorialMenuHUD.h"
 #include "TutorialProject/TutorialProjectGameInstance.h"
 #include "TutorialProject/TutorialProjectUtilities.h"
@@ -24,28 +24,42 @@ void UAccelByteAuth::NativeConstruct()
 
 	TutorialMenuHUD = Cast<ATutorialMenuHUD>(GetWorld()->GetFirstPlayerController()->GetHUD());
 	TutorialMenuHUD->GetSettingsMenu()->InitDefaultGameSettings();
-	
-	if (FParse::Param(FCommandLine::Get(), *TutorialProjectUtilities::LaunchArgsSteam))
+
+	// Check Authorization Code of Justice Launcher
+	const FString AuthorizationCode = FPlatformMisc::GetEnvironmentVariable(TEXT("JUSTICE_AUTHORIZATION_CODE"));
+	if (!AuthorizationCode.IsEmpty())
 	{
+		UE_LOG(LogTemp, Log, TEXT("Login with Launcher"));
+
+		LauncherLogin();
+	}
+	else if (FParse::Param(FCommandLine::Get(), *TutorialProjectUtilities::LaunchArgsSteam))
+	{
+		UE_LOG(LogTemp, Log, TEXT("Login with Steam"));
+
 		SteamLogin();
 	}
 	else
 	{
-		CP_LoginMenu->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		Btn_Login->OnClicked.AddUniqueDynamic(this, &UAccelByteAuth::OnClickLoginButton);
+		UE_LOG(LogTemp, Log, TEXT("Login with Username"));
+
+		T_LoginStatus->SetText(FText::FromString("Please Login"));
+		Btn_Login->OnClicked.AddUniqueDynamic(this, &UAccelByteAuth::OnLoginButtonClicked);
 	}
 }
 
-void UAccelByteAuth::OnClickLoginButton()
+void UAccelByteAuth::OnLoginButtonClicked()
 {
+	T_LoginStatus->SetText(FText::FromString("Logging in..."));
+	
 	FRegistry::User.LoginWithUsername(
 		Etb_Username->GetText().ToString(),
 		Etb_Password->GetText().ToString(),
 		FVoidHandler::CreateUObject(this, &UAccelByteAuth::LoginSuccess),
-		FErrorHandler::CreateUObject(this, &UAccelByteAuth::LoginFailed));
+		FCustomErrorHandler::CreateUObject(this, &UAccelByteAuth::LoginFailed));
 }
 
-void UAccelByteAuth::OnClickLogoutButton()
+void UAccelByteAuth::OnLogoutButtonClicked()
 {
 	FRegistry::User.Logout(
 		FVoidHandler::CreateUObject(this, &UAccelByteAuth::LogoutSuccess),
@@ -59,7 +73,8 @@ void UAccelByteAuth::OnClickLogoutButton()
 
 void UAccelByteAuth::LoginSuccess()
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString("Login Success"));
+	UE_LOG(LogTemp, Log, TEXT("Login Success"));
+	T_LoginStatus->SetText(FText::FromString("Login successful"));
 	
 	if(GetOwningPlayer() && GetOwningPlayer()->GetHUD())
 	{
@@ -68,73 +83,94 @@ void UAccelByteAuth::LoginSuccess()
 	}
 }
 
-void UAccelByteAuth::LoginFailed(int32 ErrorCode, const FString& ErrorMessage)
+void UAccelByteAuth::LoginFailed(int32 ErrorCode, const FString& ErrorMessage, const FJsonObject& ErrorJson)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Login Failed : %d , %s"), ErrorCode, *ErrorMessage));
+	UE_LOG(LogTemp, Error, TEXT("Login Failed : %d , %s"), ErrorCode, *ErrorMessage);
+	T_LoginStatus->SetText(FText::FromString(FString::Printf(TEXT("Login Failed : %d , %s"), ErrorCode, *ErrorMessage)));
 }
 
 void UAccelByteAuth::LogoutSuccess()
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString::Printf(TEXT("Logout Success")));
+	UE_LOG(LogTemp, Log, TEXT("Logout Success"));
 	
-	check(TutorialMenuHUD != nullptr)
+	if (TutorialMenuHUD == nullptr)
+	{
+		TutorialMenuHUD = Cast<ATutorialMenuHUD>(GetOwningPlayer()->GetHUD());
+	}
+
+	ensure(TutorialMenuHUD != nullptr);
+	TutorialMenuHUD->GetPartyMenu()->ResetPartyInfo();
 	TutorialMenuHUD->CloseMainMenu();
 }
 
 void UAccelByteAuth::LogoutFailed(int32 ErrorCode, const FString& ErrorMessage)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Logout Failed : %d , %s"), ErrorCode, *ErrorMessage));
+	UE_LOG(LogTemp, Error, TEXT("Logout Failed : %d , %s"), ErrorCode, *ErrorMessage);
+}
+
+void UAccelByteAuth::LauncherLogin()
+{
+	FRegistry::User.LoginWithLauncher(FVoidHandler::CreateWeakLambda(this, [this]()
+	{
+		UE_LOG(LogTemp, Log, TEXT("Login with Launcher Success"));
+
+		TutorialMenuHUD->InitLegal();
+		this->RemoveFromParent();
+	}), FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Login with Launcher Failed, ErrorCode: %d ErrorMessage: %s"), ErrorCode, *ErrorMessage);
+	}));
 }
 
 void UAccelByteAuth::SteamLogin()
 {
-	auto OSS = IOnlineSubsystem::Get(STEAM_SUBSYSTEM);
+	IOnlineSubsystem* OSS = IOnlineSubsystem::Get(STEAM_SUBSYSTEM);
 	if (OSS)
 	{
-		OSS->GetIdentityInterface()->AddOnLoginCompleteDelegate_Handle(0, FOnLoginCompleteDelegate::CreateLambda([this](int32 LocalUserNum, bool bWasSuccessful, const FUniqueNetId& UserId, const FString& Error)
+		OSS->GetIdentityInterface()->AddOnLoginCompleteDelegate_Handle(0, FOnLoginCompleteDelegate::CreateWeakLambda(this, [this](int32 LocalUserNum, bool bWasSuccessful, const FUniqueNetId& UserId, const FString& Error)
 		{
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString::Printf(TEXT("Success? %s Error: %s"), *UKismetStringLibrary::Conv_BoolToString(bWasSuccessful), *Error));
+			UE_LOG(LogTemp, Error, TEXT("Success? %s Error: %s"), bWasSuccessful ? TEXT("true") : TEXT("false"), *Error);
 
-			auto OSS = IOnlineSubsystem::Get(STEAM_SUBSYSTEM);
+			IOnlineSubsystem* OSS = IOnlineSubsystem::Get(STEAM_SUBSYSTEM);
 			
 			if (bWasSuccessful)
 			{
 				if (OSS)
 				{
-					TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Login with Steam Success"));
+					UE_LOG(LogTemp, Log, TEXT("Login with Steam Success"));
 					
 					FString SteamAuthTicket = OSS->GetIdentityInterface()->GetAuthToken(0);
 					FString PlayerNickName = OSS->GetIdentityInterface()->GetPlayerNickname(0);
 
-					FRegistry::User.LoginWithOtherPlatform(EAccelBytePlatformType::Steam, SteamAuthTicket, FVoidHandler::CreateLambda([this]()
+					FRegistry::User.LoginWithOtherPlatform(EAccelBytePlatformType::Steam, SteamAuthTicket, FVoidHandler::CreateWeakLambda(this, [this]()
 					{
-						TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Login with Other Platform Success"));
+						UE_LOG(LogTemp, Log, TEXT("Login with Other Platform Success"));
 						
 						TutorialMenuHUD->InitLegal();
 						this->RemoveFromParent();
-					}), FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+					}), FCustomErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage, const FJsonObject& ErrorJson)
 					{
-						TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Login with Other Platform Failed, ErrorCode: %d ErrorMessage: %s"), ErrorCode, *ErrorMessage));
+						UE_LOG(LogTemp, Error, TEXT("Login with Other Platform Failed, ErrorCode: %d ErrorMessage: %s"), ErrorCode, *ErrorMessage);
 					}));
 				}
 				else
 				{
-					TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("Failed to load Online Subsystem Steam"));
+					UE_LOG(LogTemp, Error, TEXT("Failed to load Online Subsystem Steam"));
 				}
 			}
 			else
 			{
-				TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Error Login with Steam, Error Message: %s"), *Error));
+				UE_LOG(LogTemp, Error, TEXT("Error Login with Steam, Error Message: %s"), *Error);
 			}
 		}));
-
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Logging into Steam"));
 		
-		FOnlineAccountCredentials NewAccount;
+		UE_LOG(LogTemp, Log, TEXT("Logging into Steam"));
+
+		const FOnlineAccountCredentials NewAccount;
 		OSS->GetIdentityInterface()->Login(0, NewAccount);
 	}
 	else
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("Failed Initialized Online Subsystem Steam"));
+		UE_LOG(LogTemp, Error, TEXT("Failed Initialized Online Subsystem Steam"));
 	}
 }

@@ -6,14 +6,22 @@
 #include "TutPlayerControllerCountGame.h"
 #include "TutorialProjectGameInstance.h"
 #include "TutorialProjectUtilities.h"
-#include "AccelByte/Statistic/AccelByteStatistic.h"
+#include "AccelByte/Entitlement/AccelByteEntitlement.h"
+#include "AccelByte/Statistic/AccelByteStatisticObject.h"
+#include "Api/AccelByteEntitlementApi.h"
 #include "Api/AccelByteUserApi.h"
 #include "GameServerApi/AccelByteServerDSMApi.h"
 #include "GameServerApi/AccelByteServerMatchmakingApi.h"
 #include "Core/AccelByteRegistry.h"
+#include "GameServerApi/AccelByteServerAchievementApi.h"
+#include "GameServerApi/AccelByteServerCloudSaveApi.h"
 
 #define STAT_CLICK "click"
 #define STAT_WIN "win"
+#define BRONZE_ABILITY_INCREMENT 20
+#define SILVER_ABILITY_INCREMENT 25
+#define FIRST_WIN_ACHIEVEMENT "win-first-time"
+#define FRIENDLY_FACE_ACHIEVEMENT "finish-party-1"
 
 ATutGameModeCountGame::ATutGameModeCountGame() :
 	CountdownTimer(3),
@@ -31,11 +39,11 @@ FString ATutGameModeCountGame::InitNewPlayer(APlayerController* NewPlayerControl
 
 	UE_LOG(LogTemp, Log, TEXT("Player Id: %s"), *ParsedPlayerId);
 	
-	FRegistry::ServerDSM.GetSessionId(THandler<FAccelByteModelsServerSessionResponse>::CreateLambda([this, ParsedPlayerId, NewPlayerController](const FAccelByteModelsServerSessionResponse& Result)
+	FRegistry::ServerDSM.GetSessionId(THandler<FAccelByteModelsServerSessionResponse>::CreateWeakLambda(this, [this, ParsedPlayerId, NewPlayerController](const FAccelByteModelsServerSessionResponse& Result)
 	{
 		UE_LOG(LogTemp, Log, TEXT("Success Get Session Id. Session Id: %s"), *Result.Session_id);
 
-		FRegistry::ServerMatchmaking.QuerySessionStatus(Result.Session_id, THandler<FAccelByteModelsMatchmakingResult>::CreateLambda([this, ParsedPlayerId, NewPlayerController](const FAccelByteModelsMatchmakingResult& Result)
+		FRegistry::ServerMatchmaking.QuerySessionStatus(Result.Session_id, THandler<FAccelByteModelsMatchmakingResult>::CreateWeakLambda(this, [this, ParsedPlayerId, NewPlayerController](const FAccelByteModelsMatchmakingResult& Result)
 		{
 			UE_LOG(LogTemp, Log, TEXT("Success Query Session Status."));
 
@@ -45,10 +53,11 @@ FString ATutGameModeCountGame::InitNewPlayer(APlayerController* NewPlayerControl
 			}
 			else
 			{
-				for (int32 Index = 0; Index < Result.Matching_allies.Num(); Index++)
+				for (uint8 Index = 0; Index < Result.Matching_allies.Num(); Index++)
 				{
 					for (const auto& MatchingParty : Result.Matching_allies[Index].Matching_parties)
-					{						
+					{
+						bool bIsPlayWithFriend = MatchingParty.Party_members.Num() > 1;
 						for (const auto& PartyMember : MatchingParty.Party_members)
 						{
 							if (PartyMember.User_id == ParsedPlayerId)
@@ -62,7 +71,7 @@ FString ATutGameModeCountGame::InitNewPlayer(APlayerController* NewPlayerControl
 									else if (GameMode == UEnum::GetDisplayValueAsText(EGameMode::FOURPLAYER).ToString()) { MinimumPlayersToPlay = 8; }
 									else if (GameMode == UEnum::GetDisplayValueAsText(EGameMode::FFA).ToString()) { MinimumPlayersToPlay = 8; }
 									
-									FRegistry::User.GetUserByUserId(ParsedPlayerId, THandler<FSimpleUserData>::CreateLambda([this, ParsedPlayerId, Index, NewPlayerController](const FSimpleUserData& Result)
+									FRegistry::User.GetUserByUserId(ParsedPlayerId, THandler<FSimpleUserData>::CreateWeakLambda(this, [this, ParsedPlayerId, Index, NewPlayerController, bIsPlayWithFriend](const FSimpleUserData& Result)
 									{
 										UE_LOG(LogTemp, Log, TEXT("Success Get User By User Id. Display Name: %s"), *Result.DisplayName);
                     										
@@ -71,14 +80,77 @@ FString ATutGameModeCountGame::InitNewPlayer(APlayerController* NewPlayerControl
 										CurrentPlayerData.DisplayName = Result.DisplayName;
 										CurrentPlayerData.Score = 0;
 										CurrentPlayerData.Click = 0;
-										CurrentPlayerData.PartyId = Index;
+										CurrentPlayerData.PartyId = static_cast<EPartyId>(Index);
+										CurrentPlayerData.bIsPlayWithFriend = bIsPlayWithFriend;
 										ATutPlayerControllerCountGame* TutorialController = Cast<ATutPlayerControllerCountGame>(NewPlayerController);
 										TutorialController->PlayerData = CurrentPlayerData;
 
-										PlayerReady(TutorialController);
-									}), FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+										FRegistry::ServerCloudSave.GetPublicUserRecord(TutorialProjectUtilities::PublicCloudSaveEquipmentKey, ParsedPlayerId, THandler<FAccelByteModelsUserRecord>::CreateWeakLambda(this, [this, ParsedPlayerId, TutorialController](const FAccelByteModelsUserRecord& Result)
+										{
+											FPlayerEquipment PlayerEquipment = {};
+											if (Result.Value.JsonObject->HasField(TutorialProjectUtilities::PublicCloudSaveBadgeJsonKey))
+											{
+												const FString& EquippedItem = Result.Value.JsonObject->GetStringField(TutorialProjectUtilities::PublicCloudSaveBadgeJsonKey);
+												PlayerEquipment.EquippedItem = EquippedItem;
+											}
+											else
+											{
+												PlayerEquipment.EquippedItem = TutorialProjectUtilities::PublicCloudSaveNoneValue;
+											}
+											
+											if (Result.Value.JsonObject->HasField(TutorialProjectUtilities::PublicCloudSaveAbilityJsonKey))
+											{
+												const FString& UsedItem = Result.Value.JsonObject->GetStringField(TutorialProjectUtilities::PublicCloudSaveAbilityJsonKey);
+												PlayerEquipment.UsedItem = UsedItem;
+
+												bool bIsItemInUsed = false;
+												if (UsedItem == TutorialProjectUtilities::PublicCloudSaveAbilityBronze)
+												{
+													bIsItemInUsed = true;
+													UserIdToScoreIncrementAbility.Emplace(ParsedPlayerId, BRONZE_ABILITY_INCREMENT);
+												}
+												else if (UsedItem == TutorialProjectUtilities::PublicCloudSaveAbilitySilver)
+												{
+													bIsItemInUsed = true;
+													UserIdToScoreIncrementAbility.Emplace(ParsedPlayerId, SILVER_ABILITY_INCREMENT);
+												}
+
+												if (bIsItemInUsed)
+												{
+													PlayerEquipment.UsedItem = TutorialProjectUtilities::PublicCloudSaveNoneValue;
+													const TSharedPtr<FJsonObject> JsonObject = FJsonObjectConverter::UStructToJsonObject(PlayerEquipment);
+													constexpr bool bIsPublic = true;
+													FRegistry::ServerCloudSave.ReplaceUserRecord(TutorialProjectUtilities::PublicCloudSaveEquipmentKey, ParsedPlayerId, *JsonObject, bIsPublic, FVoidHandler::CreateWeakLambda(this, [this, TutorialController]()
+													{
+														PlayerReady(TutorialController);
+													}), FErrorHandler::CreateWeakLambda(this, [this, TutorialController](int32 ErrorCode, const FString& ErrorMessage)
+													{
+														UE_LOG(LogTemp, Error, TEXT("Error ReplaceUserRecord, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
+														PlayerReady(TutorialController);
+													}));
+												}
+												else
+												{
+													UserIdToScoreIncrementAbility.Emplace(ParsedPlayerId, PlayerScoreIncrement);
+													PlayerReady(TutorialController);
+												}
+											}
+											else
+											{
+												UserIdToScoreIncrementAbility.Emplace(ParsedPlayerId, PlayerScoreIncrement);
+												PlayerReady(TutorialController);
+											}
+										}), FErrorHandler::CreateWeakLambda(this, [this, TutorialController, ParsedPlayerId](int32 ErrorCode, const FString& ErrorMessage)
+										{
+											UE_LOG(LogTemp, Error, TEXT("Error GetPublicUserRecord, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
+											
+											UserIdToScoreIncrementAbility.Emplace(ParsedPlayerId, PlayerScoreIncrement);
+
+											PlayerReady(TutorialController);
+										}));
+									}), FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 									{
-										UE_LOG(LogTemp, Log, TEXT("Error Get User by User Id, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
+										UE_LOG(LogTemp, Error, TEXT("Error Get User by User Id, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 									}));
 								}
 							}
@@ -86,11 +158,11 @@ FString ATutGameModeCountGame::InitNewPlayer(APlayerController* NewPlayerControl
 					}
 				}
 			}
-		}), FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+		}), FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 		{
 			UE_LOG(LogTemp, Log, TEXT("Error Query Session Status, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 		}));
-	}), FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+	}), FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 	{
 		UE_LOG(LogTemp, Log, TEXT("Error Get SessionId, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 	}));
@@ -121,7 +193,7 @@ void ATutGameModeCountGame::Countdown()
 
 void ATutGameModeCountGame::DecrementCountdownTimer()
 {
-	int TimeLeft = CountdownTimer--;
+	const int TimeLeft = CountdownTimer--;
 	NotifyClientCountdownTimerUpdate(TimeLeft);
 
 	if (CountdownTimer < -1)
@@ -138,7 +210,7 @@ void ATutGameModeCountGame::StartGame()
 
 	TArray<FPlayerData> PlayerDataArray;
 
-	for (ATutPlayerControllerCountGame* TutorialController : PlayerControllers)
+	for (const ATutPlayerControllerCountGame* TutorialController : PlayerControllers)
 	{
 		PlayerDataArray.Add(TutorialController->PlayerData);
 	}
@@ -151,70 +223,76 @@ void ATutGameModeCountGame::StartGame()
 
 void ATutGameModeCountGame::DecrementTimer()
 {
-	int TimeLeft = GameTimer--;
+	const int TimeLeft = GameTimer--;
 	NotifyClientTimeUpdate(TimeLeft);
 
 	if (GameTimer < -1)
 	{
 		TArray<FPlayerData> PlayerDataArray;
 
-		for (ATutPlayerControllerCountGame* PlayerController : PlayerControllers)
+		for (const ATutPlayerControllerCountGame* PlayerController : PlayerControllers)
 		{
 			PlayerDataArray.Add(PlayerController->PlayerData);
 		}
 
 		int32 TeamAScore = 0;
 		int32 TeamBScore = 0;
-		
 		for (const FPlayerData& PlayerInfo : PlayerDataArray)
 		{
-			if (PlayerInfo.PartyId == 0)
+			if (PlayerInfo.PartyId == EPartyId::PartyA)
 			{
 				TeamAScore += PlayerInfo.Score;
 			}
-			else
+			else if (PlayerInfo.PartyId == EPartyId::PartyB)
 			{
 				TeamBScore += PlayerInfo.Score;
 			}
 		}
 
-		uint8 WinnerPartyId = 0;
-		if (TeamAScore > TeamBScore)
+		EWinnerParty WinnerParty;
+		if (TeamAScore == TeamBScore)
 		{
-			WinnerPartyId = 0;
+			WinnerParty = EWinnerParty::Draw;
+		}
+		else if (TeamAScore > TeamBScore)
+		{
+			WinnerParty = EWinnerParty::TeamA;
 		}
 		else
 		{
-			WinnerPartyId = 1;
+			WinnerParty = EWinnerParty::TeamB;
 		}
 
 		// Set Statistics based on the current game data result
-		SetStatisticValue(PlayerDataArray, WinnerPartyId);
+		SetStatisticValue(PlayerDataArray, WinnerParty);
 
-		NotifyClientGameOver(WinnerPartyId);
+		NotifyClientGameOver(WinnerParty);
 		GetWorldTimerManager().ClearTimer(DecrementTimerHandle);
 	}
 }
 
 void ATutGameModeCountGame::IncreaseScore(const FString& UserId)
 {
-	int32 Index = PlayerControllers.IndexOfByPredicate([UserId](ATutPlayerControllerCountGame* PlayerController)
+	const int32 Index = PlayerControllers.IndexOfByPredicate([UserId](const ATutPlayerControllerCountGame* PlayerController)
 	{
 		return UserId == PlayerController->PlayerData.UserId;
 	});
 
 	// Define Player Data and add score (for gameplay) and click (for statistic).
 	FPlayerData CurrentPlayerData = PlayerControllers[Index]->PlayerData;
-	CurrentPlayerData.Score += PlayerScoreIncrement;
-	CurrentPlayerData.Click += PlayerClickIncrement;
-	PlayerControllers[Index]->PlayerData = CurrentPlayerData;
+	if (UserIdToScoreIncrementAbility.FindRef(UserId))
+	{
+		CurrentPlayerData.Score += UserIdToScoreIncrementAbility.FindRef(UserId);
+		CurrentPlayerData.Click += PlayerClickIncrement;
+		PlayerControllers[Index]->PlayerData = CurrentPlayerData;
 	
-	NotifyClientScoreIncrease(UserId, CurrentPlayerData);
+		NotifyClientScoreIncrease(UserId, CurrentPlayerData, UserIdToScoreIncrementAbility.FindRef(UserId));
+	}
 }
 
-void ATutGameModeCountGame::SetStatisticValue(const TArray<FPlayerData>& PlayerDataArray, const uint8 WinnerPartyId)
+void ATutGameModeCountGame::SetStatisticValue(const TArray<FPlayerData>& PlayerDataArray, const EWinnerParty& WinnerParty)
 {
-	AccelByteStatistic = NewObject<UAccelByteStatistic>();
+	AccelByteStatisticObject = NewObject<UAccelByteStatisticObject>();
 	
 	// Create a Map that contains StatCode info along with its increment value
 	TMap<FString, int32> StatCodes;
@@ -225,21 +303,46 @@ void ATutGameModeCountGame::SetStatisticValue(const TArray<FPlayerData>& PlayerD
 		// Set the Player's Total Clicks as the "click" stat increment value
 		StatCodes.Add(STAT_CLICK, PlayerInfo.Click);
 
-		// Increment the "win" stat value only for the winner users
-		if (PlayerInfo.PartyId == WinnerPartyId)
+		// Increment the "win" stat value only for the winner users, if draw then there are no user that increase their statistic
+		if (static_cast<uint8>(PlayerInfo.PartyId) == static_cast<uint8>(WinnerParty))
 		{
 			StatCodes.Add(STAT_WIN, StatWinIncrement);
+
+			// Unlock user Achievement for "win-first-time" achievement
+			FRegistry::ServerAchievement.UnlockAchievement(PlayerInfo.UserId, FIRST_WIN_ACHIEVEMENT, FVoidHandler::CreateWeakLambda(this, [PlayerInfo]()
+			{
+				UE_LOG(LogTemp, Log, TEXT("Unlock Achievement Success, UserId: %s Achievement Code: %s"), *PlayerInfo.UserId, *FIRST_WIN_ACHIEVEMENT);
+			}), FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Unlock Achievement is not Success, Code: %d Message: %s"), ErrorCode, *ErrorMessage);
+			}));
+
+			if (PlayerInfo.bIsPlayWithFriend)
+			{
+				// Unlock user Achievement for "finish-party-1" achievement
+				FRegistry::ServerAchievement.UnlockAchievement(PlayerInfo.UserId, FRIENDLY_FACE_ACHIEVEMENT, FVoidHandler::CreateWeakLambda(this, [PlayerInfo]()
+				{
+					UE_LOG(LogTemp, Log, TEXT("Unlock Achievement Success, UserId: %s Achievement Code: %s"), *PlayerInfo.UserId, *FRIENDLY_FACE_ACHIEVEMENT);
+				}), FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Unlock Achievement is not Success, Code: %d Message: %s"), ErrorCode, *ErrorMessage);
+				}));
+			}
 		}
 		
-		AccelByteStatistic->IncrementServerStatistic(PlayerInfo.UserId, StatCodes);
+		AccelByteStatisticObject->IncrementServerStatistic(
+			PlayerInfo.UserId,
+			StatCodes,
+			FVoidHandler::CreateWeakLambda(this, [this](){}),
+			FErrorHandler::CreateWeakLambda(this, [this](int32 ErrorCode, const FString& ErrorMessage){}));
 	}
 }
 
-void ATutGameModeCountGame::NotifyClientGameOver(const uint8 WinnerPartyId)
+void ATutGameModeCountGame::NotifyClientGameOver(const EWinnerParty& WinnerParty)
 {
 	for (ATutPlayerControllerCountGame* TutorialController : PlayerControllers)
 	{
-		TutorialController->Client_ReceiveGameOverEvent(WinnerPartyId);
+		TutorialController->Client_ReceiveGameOverEvent(WinnerParty);
 	}
 }
 
@@ -259,13 +362,17 @@ void ATutGameModeCountGame::NotifyClientTimeUpdate(const int& TimeLeft)
 	}
 }
 
-void ATutGameModeCountGame::NotifyClientScoreIncrease(const FString& UserId, const FPlayerData& CurrentPlayerData)
+void ATutGameModeCountGame::NotifyClientScoreIncrease(const FString& UserId, const FPlayerData& CurrentPlayerData, int32 ScoreIncrement)
 {
 	for (ATutPlayerControllerCountGame* TutorialController : PlayerControllers)
 	{
-		TutorialController->Client_ReceiveScoreIncreaseEvent(UserId, CurrentPlayerData, PlayerScoreIncrement);
+		TutorialController->Client_ReceiveScoreIncreaseEvent(UserId, CurrentPlayerData, ScoreIncrement);
 	}
 }
 
 #undef STAT_CLICK
 #undef STAT_WIN
+#undef BRONZE_ABILITY_INCREMENT
+#undef SILVER_ABILITY_INCREMENT
+#undef FIRST_WIN_ACHIEVEMENT
+#undef FRIENDLY_FACE_ACHIEVEMENT

@@ -9,7 +9,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "TutGameModeCountGame.generated.h"
 
-class UAccelByteStatistic;
+class UAccelByteStatisticObject;
 
 /**
  * Custom Game Mode that serves as the Dedicated Server, controlling Game Logic and Functionality
@@ -64,22 +64,25 @@ protected:
 	* @brief Functionality to Notify the Clients to Update the specified user's score.
 	*/
 	UFUNCTION()
-	void NotifyClientScoreIncrease(const FString& UserId, const FPlayerData& CurrentPlayerData);
+	void NotifyClientScoreIncrease(const FString& UserId, const FPlayerData& CurrentPlayerData, int32 ScoreIncrement);
 
 	/**
 	* @brief Functionality to Notify the Clients that the Game is Over and a Winner is determined.
 	*/
 	UFUNCTION()
-	void NotifyClientGameOver(const uint8 WinnerPartyId);
+	void NotifyClientGameOver(const EWinnerParty& WinnerParty);
 	
 	/**
 	* @brief Functionality to set a Player's Status as Ready.
 	*/
 	void PlayerReady(ATutPlayerControllerCountGame* ReadyPlayerController);
 
+	TMap<FString, int32> UserIdToScoreIncrementAbility;
+
 	/**
 	* @brief TArray that lists the Player Controllers who are ready.
 	*/
+	UPROPERTY()
 	TArray<ATutPlayerControllerCountGame*> PlayerControllers;
 
 	/**
@@ -136,13 +139,13 @@ private:
 	/**
 	 * @brief Set Statistic Value from Player's game data.
 	 */
-	void SetStatisticValue(const TArray<FPlayerData>& PlayerDataArray, const uint8 WinnerPartyId);
+	void SetStatisticValue(const TArray<FPlayerData>& PlayerDataArray, const EWinnerParty& WinnerParty);
 	
 	/**
 	 * @brief Initialize Statistic Class to be able to call its functions
 	 */
 	UPROPERTY()
-	UAccelByteStatistic* AccelByteStatistic;
+	UAccelByteStatisticObject* AccelByteStatisticObject;
 	
 #pragma endregion 
 };

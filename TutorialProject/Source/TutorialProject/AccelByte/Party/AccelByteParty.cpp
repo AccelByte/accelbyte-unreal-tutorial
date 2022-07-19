@@ -11,8 +11,8 @@
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "TutorialProject/TutorialMenuHUD.h"
-#include "TutorialProject/AccelByte/Lobby/AccelByteLobby.h"
 #include "TutorialProject/TutorialProjectUtilities.h"
+#include "TutorialProject/AccelByte/Lobby/AccelByteLobby.h"
 
 void UAccelByteParty::NativeConstruct()
 {
@@ -25,6 +25,8 @@ void UAccelByteParty::NativeConstruct()
 	Btn_LeaveParty->OnClicked.AddUniqueDynamic(this, &UAccelByteParty::OnClickedLeaveParty);
 
 	TotalPartyMember = TutorialProjectUtilities::DefaultPartyMemberCount;
+
+	GetCurrentPartyInfo();
 
 	SetNotificationDelegate();
 }
@@ -46,25 +48,24 @@ void UAccelByteParty::OnClickedInviteParty(const FString& UserId)
 
 void UAccelByteParty::SetNotificationDelegate()
 {
-	FRegistry::Lobby.SetCreatePartyResponseDelegate(Lobby::FPartyCreateResponse::CreateUObject(this, &UAccelByteParty::OnCreatePartyResponse),
+	FRegistry::Lobby.SetCreatePartyResponseDelegate(Api::Lobby::FPartyCreateResponse::CreateUObject(this, &UAccelByteParty::OnCreatePartyResponse),
 		FErrorHandler::CreateUObject(this, &UAccelByteParty::OnCreatePartyFailed));
 
-	FRegistry::Lobby.SetLeavePartyResponseDelegate(Lobby::FPartyLeaveResponse::CreateUObject(this, &UAccelByteParty::OnLeavePartyResponse),
+	FRegistry::Lobby.SetLeavePartyResponseDelegate(Api::Lobby::FPartyLeaveResponse::CreateUObject(this, &UAccelByteParty::OnLeavePartyResponse),
 		FErrorHandler::CreateUObject(this, &UAccelByteParty::OnLeavePartyFailed));
 
-	FRegistry::Lobby.SetInvitePartyResponseDelegate(Lobby::FPartyInviteResponse::CreateUObject(this, &UAccelByteParty::OnInvitePartyResponse),
+	FRegistry::Lobby.SetInvitePartyResponseDelegate(Api::Lobby::FPartyInviteResponse::CreateUObject(this, &UAccelByteParty::OnInvitePartyResponse),
 		FErrorHandler::CreateUObject(this, &UAccelByteParty::OnInvitePartyFailed));
 
-	FRegistry::Lobby.SetPartyGetInvitedNotifDelegate(Lobby::FPartyGetInvitedNotif::CreateUObject(this, &UAccelByteParty::OnInvitePartyGetInviteNotice));
-	FRegistry::Lobby.SetPartyKickNotifDelegate(Lobby::FPartyKickNotif::CreateUObject(this, &UAccelByteParty::OnInvitePartyKickedNotice));
-	FRegistry::Lobby.SetPartyLeaveNotifDelegate(Lobby::FPartyLeaveNotif::CreateUObject(this, &UAccelByteParty::OnLeavePartyNotice));
-	FRegistry::Lobby.SetPartyDataUpdateResponseDelegate(Lobby::FPartyDataUpdateNotif::CreateUObject(this, &UAccelByteParty::OnPartyDataUpdateResponse));
+	FRegistry::Lobby.SetPartyGetInvitedNotifDelegate(Api::Lobby::FPartyGetInvitedNotif::CreateUObject(this, &UAccelByteParty::OnInvitePartyGetInviteNotice));
+	FRegistry::Lobby.SetPartyKickNotifDelegate(Api::Lobby::FPartyKickNotif::CreateUObject(this, &UAccelByteParty::OnInvitePartyKickedNotice));
+	FRegistry::Lobby.SetPartyLeaveNotifDelegate(Api::Lobby::FPartyLeaveNotif::CreateUObject(this, &UAccelByteParty::OnLeavePartyNotice));
+	FRegistry::Lobby.SetPartyDataUpdateNotifDelegate(Api::Lobby::FPartyDataUpdateNotif::CreateUObject(this, &UAccelByteParty::OnPartyDataUpdateResponse));
 }
 
 void UAccelByteParty::RefreshPartyList()
 {
 	Sb_Player->ClearChildren();
-
 	PartyPlayerEntryWidgetArray.Empty();
 
 	if (PartyInfo.PartyId.IsEmpty())
@@ -72,6 +73,12 @@ void UAccelByteParty::RefreshPartyList()
 		return;
 	}
 
+	if (!bIsInParty)
+	{
+		bIsInParty = true;
+		TutorialMenuHUD->GetMatchmakingMenu()->SetMatchmakingNotification();
+	}
+	
 	for (int i = 0; i < TotalPartyMember; ++i)
 	{
 		TWeakObjectPtr<UAccelBytePartyPlayerEntry> PlayerEntry = MakeWeakObjectPtr<UAccelBytePartyPlayerEntry>(CreateWidget<UAccelBytePartyPlayerEntry>(this, PartyPlayerEntryClass.Get()));
@@ -153,13 +160,13 @@ void UAccelByteParty::SetUpdateLeaderIcon(const FString& LeaderId) const
 	}
 }
 
-void UAccelByteParty::SetCreatePartyButtonEnabled(const bool& bIsCreateParty) const
+void UAccelByteParty::SetCreatePartyButtonEnabled(bool bIsCreateParty) const
 {
 	Btn_CreateParty->SetIsEnabled(bIsCreateParty);
 	Btn_LeaveParty->SetIsEnabled(!bIsCreateParty);
 }
 
-void UAccelByteParty::CheckTotalMemberGameMode()
+void UAccelByteParty::CheckTotalMemberGameMode() const
 {
 	if (PartyInfo.Leader == FRegistry::Credentials.GetUserId())
 	{
@@ -177,48 +184,82 @@ void UAccelByteParty::CheckTotalMemberGameMode()
 	}
 }
 
+void UAccelByteParty::ResetPartyInfo()
+{
+	const FAccelByteModelsPartyDataNotif EmptyData;
+	PartyInfo = EmptyData;
+	bIsInParty = false;
+	
+	RefreshPartyEntries();
+
+	TutorialMenuHUD->GetChatMenu()->DeleteTabButtonWidget(EChatTabType::Party);
+	TutorialMenuHUD->GetChatMenu()->SwitchChatTab(EChatTabType::Global);
+		
+	FRegistry::Lobby.UnbindMatchmakingNotifEvents();
+}
+
+void UAccelByteParty::GetCurrentPartyInfo()
+{
+	if (FRegistry::Lobby.IsConnected())
+	{
+		FRegistry::Lobby.SendInfoPartyRequest(Api::Lobby::FPartyInfoResponse::CreateWeakLambda(this, [this](const FAccelByteModelsInfoPartyResponse& Result)
+		{
+			UE_LOG(LogTemp, Log, TEXT("Get information about current party success"));
+
+			PartyInfo.PartyId = Result.PartyId;
+			PartyInfo.Members = Result.Members;
+			PartyInfo.Leader = Result.LeaderId;
+			RefreshPartyEntries();
+
+			// make sure to show a party chat tab
+			TutorialMenuHUD->GetChatMenu()->CreateTabButtonWidget(EChatTabType::Party);
+		}), 
+		FErrorHandler::CreateWeakLambda(this, [this](int32 ErrorCode, const FString& ErrorMessage)
+		{
+			UE_LOG(LogTemp, Error, TEXT("Get information about current party failed, ErrorCode: %d ErrorMessage: %s"), ErrorCode, *ErrorMessage);
+					
+			RefreshPartyEntries();
+		}));
+	}
+}
+
 void UAccelByteParty::OnCreatePartyResponse(const FAccelByteModelsCreatePartyResponse& Result)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Create Party Success!"));
+	UE_LOG(LogTemp, Log, TEXT("Create Party Success!"));
 
 	TutorialMenuHUD->GetChatMenu()->CreateTabButtonWidget(EChatTabType::Party);
 }
 
 void UAccelByteParty::OnCreatePartyFailed(int32 ErrorCode, const FString& ErrorMessage)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Create Party Failed : %d , %s"), ErrorCode, *ErrorMessage));
+	UE_LOG(LogTemp, Error, TEXT("Create Party Failed : %d , %s"), ErrorCode, *ErrorMessage);
 }
 
 void UAccelByteParty::OnLeavePartyResponse(const FAccelByteModelsLeavePartyResponse& Result)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Leave Party Success!"));
+	UE_LOG(LogTemp, Log, TEXT("Leave Party Success!"));
 
-	const FAccelByteModelsPartyDataNotif EmptyData;
-	PartyInfo = EmptyData;
-
-	RefreshPartyEntries();
-
-	TutorialMenuHUD->GetChatMenu()->DeleteTabButtonWidget(EChatTabType::Party);
+	ResetPartyInfo();
 }
 
 void UAccelByteParty::OnLeavePartyFailed(int32 ErrorCode, const FString& ErrorMessage)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Leave Party Failed : %d , %s"), ErrorCode, *ErrorMessage));
+	UE_LOG(LogTemp, Error, TEXT("Leave Party Failed : %d , %s"), ErrorCode, *ErrorMessage);
 }
 
 void UAccelByteParty::OnInvitePartyResponse(const FAccelByteModelsPartyInviteResponse& Result)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Invite Party Success!"));
+	UE_LOG(LogTemp, Log, TEXT("Invite Party Success!"));
 }
 
 void UAccelByteParty::OnInvitePartyFailed(int32 ErrorCode, const FString& ErrorMessage)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Invite Party Failed : %d , %s"), ErrorCode, *ErrorMessage));
+	UE_LOG(LogTemp, Error, TEXT("Invite Party Failed : %d , %s"), ErrorCode, *ErrorMessage);
 }
 
 void UAccelByteParty::OnInvitePartyGetInviteNotice(const FAccelByteModelsPartyGetInvitedNotice& Result)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("On Get Invite to Party Notice!"));
+	UE_LOG(LogTemp, Log, TEXT("On Get Invite to Party Notice!"));
 
 	const TWeakObjectPtr<UAccelBytePartyInvitationPopUp> InvitationPopUpWidget = MakeWeakObjectPtr<UAccelBytePartyInvitationPopUp>(
 		CreateWidget<UAccelBytePartyInvitationPopUp>(this, PartyInvitationPopUpClass.Get()));
@@ -229,24 +270,19 @@ void UAccelByteParty::OnInvitePartyGetInviteNotice(const FAccelByteModelsPartyGe
 
 void UAccelByteParty::OnInvitePartyKickedNotice(const FAccelByteModelsGotKickedFromPartyNotice& Result)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("You have been kicked from the party!"));
+	UE_LOG(LogTemp, Log, TEXT("You have been kicked from the party!"));
 
-	const FAccelByteModelsPartyDataNotif EmptyData;
-	PartyInfo = EmptyData;
-
-	RefreshPartyEntries();
-
-	TutorialMenuHUD->GetChatMenu()->DeleteTabButtonWidget(EChatTabType::Party);
+	ResetPartyInfo();
 }
 
 void UAccelByteParty::OnLeavePartyNotice(const FAccelByteModelsLeavePartyNotice& Result)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("On Some Player Leaved Notice!"));
+	UE_LOG(LogTemp, Log, TEXT("On Some Player Leaved Notice!"));
 }
 
 void UAccelByteParty::OnPartyDataUpdateResponse(const FAccelByteModelsPartyDataNotif& Result)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("On Party Data Update Response!"));
+	UE_LOG(LogTemp, Log, TEXT("On Party Data Update Response!"));
 
 	PartyInfo = Result;
 

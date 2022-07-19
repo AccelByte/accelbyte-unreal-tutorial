@@ -1,4 +1,4 @@
-// Copyright (c) 2021 AccelByte Inc. All Rights Reserved.
+// Copyright (c) 2022 AccelByte Inc. All Rights Reserved.
 // This is licensed software from AccelByte Inc, for limitations
 // and restrictions contact your company contract manager.
 
@@ -6,13 +6,19 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "AccelByteStatistic.generated.h"
+#include "Core/AccelByteError.h"
+#include "AccelByteStatisticObject.generated.h"
 
 /**
- * @brief UObject class to handle Statistic service
+ * UObject class to handle Statistic services, used in different levels.
+ * This class provide these functionalities:
+ * 
+ * - Create Statistic Items from Client-side and Server-side
+ * - Increment Statistic Items value from Client-side and Server-side
+ * - Get Statistic Items from Client-side and Server-side
  */
 UCLASS()
-class TUTORIALPROJECT_API UAccelByteStatistic : public UObject
+class TUTORIALPROJECT_API UAccelByteStatisticObject : public UObject
 {
 	GENERATED_BODY()
 
@@ -31,15 +37,18 @@ public:
 	 * @brief Increment User's Statistic Items value that need to Set By SERVER
 	 * @param UserId User id of the player/client
 	 * @param StatMap Map of User's StatItems information, consist of StatCode and its increment value
+	 * @param OnSuccess
+	 * @param OnError
 	 */
-	void IncrementServerStatistic(const FString& UserId, const TMap<FString, int32>& StatMap);
+	void IncrementServerStatistic(const FString& UserId, const TMap<FString, int32>& StatMap, const AccelByte::FVoidHandler& OnSuccess, const AccelByte::FErrorHandler& OnError);
 
 	/**
 	 * @brief Retrieve User's Statistic Items from Server SDK
+	 * @param UserId
 	 * @param StatCodes 
 	 * @param Tags 
 	 */
-	void GetServerStatistic(const FString& UserId, const TArray<FString>& StatCodes, const TArray<FString>& Tags) const;
+	void GetServerStatistic(const FString& UserId, const TArray<FString>& StatCodes, const TArray<FString>& Tags);
 
 #pragma endregion 
 	
@@ -56,15 +65,17 @@ public:
 	/**
 	 * @brief Increment User's Statistic Items value that need to Set By SERVER
 	 * @param StatMap Map of User's StatItems information, consist of StatCode and its increment value
+	 * @param OnSuccess
 	 */
-	void IncrementUserStatistic(const TMap<FString, int32>& StatMap);
+	void IncrementUserStatistic(const TMap<FString, int32>& StatMap, const AccelByte::FVoidHandler& OnSuccess);
 
 	/**
 	 * @brief Retrieve User's Statistic Items from Client SDK
 	 * @param StatCodes 
 	 * @param Tags 
 	 */
-	void GetUserStatistic(const TArray<FString>& StatCodes, const TArray<FString>& Tags) const;
+	void GetUserStatistic(const TArray<FString>& StatCodes, const TArray<FString>& Tags);
 
-#pragma endregion 
+#pragma endregion
+	
 };

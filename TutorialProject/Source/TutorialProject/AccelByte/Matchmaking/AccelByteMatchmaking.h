@@ -10,6 +10,7 @@
 #include "Models/AccelByteLobbyModels.h"
 #include "AccelByteMatchmaking.generated.h"
 
+class UTextBlock;
 class UListView;
 class UButton;
 class ATutorialMenuHUD;
@@ -34,17 +35,32 @@ class TUTORIALPROJECT_API UAccelByteMatchmaking : public UUserWidget
 	
 protected:
 
-	virtual void NativeOnInitialized() override;
-	
-	virtual void NativeDestruct() override;
+	UAccelByteMatchmaking(const FObjectInitializer& ObjectInitializer);
 
+	virtual void NativeOnInitialized() override;
+
+	virtual void NativeConstruct() override;
+
+	void SetCountDownTimer();
+
+	UPROPERTY()
 	ATutorialMenuHUD* TutorialMenuHUD;
 
-	uint8 IndexTeamA = 0;
+	uint8 IndexTeamA;
 
-	uint8 IndexTeamB = 1;
+	uint8 IndexTeamB;
 
-	uint8 MaximumPlayersEntry = 4;
+	uint8 MaximumPlayersEntry;
+
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* T_Countdown;
+
+	FTimerHandle CountDownTimer;
+
+	/**
+	 * @brief the ready consent timeout is set in Admin Portal. the link is here: https://demo.accelbyte.io/admin/lobby-configuration/unrealtutorialproject
+	 */
+	int32 ReadyConsentTimeOutInSec;
 	
 private:
 	
@@ -82,6 +98,14 @@ private:
 	*/
 	UFUNCTION()
 	void OnMatchmakingNotification(const FAccelByteModelsMatchmakingNotice& Notice);
+
+	void ResetPlayerEntries();
+
+	/**
+	* @brief Callback when event triggered on rematchmaking or ready consent timeout.
+	*/
+	UFUNCTION()
+	void OnPlayerTimeOutReadyConsent(const FAccelByteModelsRematchmakingNotice& Notice);
 	
 	/**
 	* @brief Response for ready consent.
@@ -132,6 +156,8 @@ private:
 	FAccelByteModelsMatchmakingNotice MatchmakingNotice;
 
 public:
+
+	void SetMatchmakingNotification();
 	
 	/**
 	* @brief Match ID container when created.

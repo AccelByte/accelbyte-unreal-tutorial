@@ -8,7 +8,6 @@
 #include "Core/AccelByteRegistry.h"
 #include "Components/Button.h"
 #include "TutorialProject/TutorialMenuHUD.h"
-#include "TutorialProject/TutorialProjectUtilities.h"
 #include "TutorialProject/AccelByte/Lobby/AccelByteLobby.h"
 
 void UAccelByteFindMatchPopUp::NativeConstruct()
@@ -31,18 +30,18 @@ void UAccelByteFindMatchPopUp::CancelMatch()
 
 void UAccelByteFindMatchPopUp::OnMatchmakingCancelSuccess(const FAccelByteModelsMatchmakingResponse& Result)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Cancel Matchmaking Success"));
+	UE_LOG(LogTemp, Log, TEXT("Cancel Matchmaking Success"));
 }
 
 void UAccelByteFindMatchPopUp::OnMatchmakingCancelFailed(const int32 Code, const FString& Message)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Failed to cancel matchmaking ! Code : %i , Message : %s"), Code, *Message));
+	UE_LOG(LogTemp, Error, TEXT("Failed to cancel matchmaking ! Code : %i , Message : %s"), Code, *Message);
 }
 
-void UAccelByteFindMatchPopUp::SetCancelMatchButtonVisibility()
+void UAccelByteFindMatchPopUp::SetCancelMatchButtonVisibility() const
 {
-	bool IsVisible = Cast<ATutorialMenuHUD>(GetOwningPlayer()->GetHUD())->GetPartyMenu()->PartyInfo.Leader == FRegistry::Credentials.GetUserId();
-	if (IsVisible)
+	bool bIsVisible = Cast<ATutorialMenuHUD>(GetOwningPlayer()->GetHUD())->GetPartyMenu()->PartyInfo.Leader == FRegistry::Credentials.GetUserId();
+	if (bIsVisible)
 	{
 		Btn_CancelMatch->SetVisibility(ESlateVisibility::Visible);
 	}

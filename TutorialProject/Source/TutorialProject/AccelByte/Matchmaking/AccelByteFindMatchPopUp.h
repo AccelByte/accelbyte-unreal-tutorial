@@ -51,5 +51,5 @@ public:
 	/**
 	 * @brief Set current cancel match button visibility. this will handle if the leader is wanted to cancel the matchmaking.
 	 */
-	void SetCancelMatchButtonVisibility();
+	void SetCancelMatchButtonVisibility() const;
 };

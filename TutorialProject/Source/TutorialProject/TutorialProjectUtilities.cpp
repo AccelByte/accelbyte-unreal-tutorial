@@ -9,7 +9,10 @@
 #pragma region Server
 FString TutorialProjectUtilities::LaunchArgsLocalDS = TEXT("localds");
 FString TutorialProjectUtilities::LaunchArgsSteam = TEXT("steam");
-FString TutorialProjectUtilities::LocalServerName = FString::Printf(TEXT("%s-%s"), *TutorialProjectUtilities::LaunchArgsLocalDS, *FPlatformMisc::GetDeviceId());
+FString TutorialProjectUtilities::LocalServerName = FString::Printf(TEXT("%s-%s"), *TutorialProjectUtilities::LaunchArgsLocalDS, *TutorialProjectUtilities::GetDeviceId());
+FString TutorialProjectUtilities::LocalServerIpAddress = "127.0.0.1";
+int32 TutorialProjectUtilities::LocalServerPort = 7777;
+int32 TutorialProjectUtilities::ServerPort = 7777;
 #pragma endregion 
 
 #pragma region Cloud Save
@@ -18,17 +21,35 @@ FString TutorialProjectUtilities::CloudSaveJsonKeyA = TEXT("DisplayMode");
 FString TutorialProjectUtilities::CloudSaveJsonKeyB = TEXT("CloudSaveState");
 EWindowMode::Type TutorialProjectUtilities::DefaultDisplaySettings = EWindowMode::Type::Windowed;
 FIntPoint TutorialProjectUtilities::DefaultResolutionSettings = FIntPoint(1280, 720);
-int32 TutorialProjectUtilities::DefaultDisplayModeIndex = 2;
 int32 TutorialProjectUtilities::DefaultCloudSaveStateIndex = 0;
+FString TutorialProjectUtilities::PublicCloudSaveEquipmentKey = TEXT("player-equipment");
+FString TutorialProjectUtilities::PublicCloudSaveAbilityJsonKey = TEXT("usedItem");
+FString TutorialProjectUtilities::PublicCloudSaveBadgeJsonKey = TEXT("equippedItem");
+FString TutorialProjectUtilities::PublicCloudSaveNoneValue = TEXT("None");
+FString TutorialProjectUtilities::PublicCloudSaveAbilityBronze = TEXT("Ability_Bronze");
+FString TutorialProjectUtilities::PublicCloudSaveAbilitySilver = TEXT("Ability_Silver");
 #pragma endregion
 
 #pragma region Cloud Storage
 FString TutorialProjectUtilities::ResourcePathForSaveGalleryImage = TEXT("Caches/MyScreenshotGallery");
 FString TutorialProjectUtilities::GalleryLabel = TEXT("Gallery Label");
 FString TutorialProjectUtilities::GalleryTag = TEXT("Gallery Tag");
-#pragma endregion 
+#pragma endregion
+
+#pragma region Reward and Pop Up Notification
+FString TutorialProjectUtilities::RewardNotificationTopic = TEXT("e-commerce/rewards");
+FString TutorialProjectUtilities::RewardTopic = TEXT("rewardTopic");
+FString TutorialProjectUtilities::AchievementEventTopic = TEXT("Achievement");
+FString TutorialProjectUtilities::RewardCondition = TEXT("rewardCondition");
+FString TutorialProjectUtilities::AchievementCodeSplitString = TEXT("achievementCode");
+FString TutorialProjectUtilities::EntitlementSummariesObjectField = TEXT("entitlementSummaries");
+FString TutorialProjectUtilities::ItemIdStringField = TEXT("itemId");
+FString TutorialProjectUtilities::CreditSummariesObjectField = TEXT("creditSummaries");
+FString TutorialProjectUtilities::AmountStringField = TEXT("amount");
+#pragma
 
 #pragma region General Utilities
+
 FString TutorialProjectUtilities::GameModeAttributeName = TEXT("GameMode");
 FString TutorialProjectUtilities::VirtualCurrencyCode = TEXT("VC");
 FString TutorialProjectUtilities::DefaultImage = TEXT("AccelByte.png");
@@ -39,6 +60,8 @@ TMap<FString, EImageFormat> TutorialProjectUtilities::ImageFormatMap =
 	{"image/bmp", EImageFormat::BMP}
 };
 int32 TutorialProjectUtilities::DefaultPartyMemberCount = 4;
+int32 TutorialProjectUtilities::DefaultReadyConsentTimeOut = 30;
+FLinearColor TutorialProjectUtilities::SelectedTabGreyColor = FLinearColor(0.2f, 0.2f, 0.2f, 1.0f);
 #pragma endregion
 
 void TutorialProjectUtilities::ShowLog(const ELogVerbosity::Type& LogVerbosity, const FString& InitLog)
@@ -70,6 +93,67 @@ void TutorialProjectUtilities::ShowLog(const ELogVerbosity::Type& LogVerbosity, 
 			break;
 	}
 	GEngine->AddOnScreenDebugMessage(-1, 10.0f, LogColor, InitLog);
+}
+
+FString TutorialProjectUtilities::LocalDeviceId()
+{
+	FString NewDeviceId;
+
+	//check then read file
+	FString CurrentDirectory = IFileManager::Get().ConvertToAbsolutePathForExternalAppForRead(*FPaths::ProjectDir());
+	CurrentDirectory.Append(TEXT("DeviceIdHelper/DeviceId.txt"));
+	CurrentDirectory.ReplaceInline(TEXT("/"), TEXT("\\"));
+	FFileHelper::LoadFileToString(NewDeviceId, *CurrentDirectory);
+
+	//generate one if still empty
+	if(NewDeviceId.IsEmpty())
+	{
+		FString FilePath = IFileManager::Get().ConvertToAbsolutePathForExternalAppForRead(*FPaths::ProjectDir());
+		FilePath.Append("DeviceIdHelper/DeviceId.txt");
+
+		TCHAR valid[] = {'0', '1', '2', '3', '4', '5', '6','7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
+						'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'};
+		
+		for(int i = 0; i < 30; i++)
+		{
+			NewDeviceId = NewDeviceId + valid[FMath::RandRange(0, 35)];
+		}
+		
+		FFileHelper::SaveStringToFile(NewDeviceId, *FilePath);
+	}
+	return NewDeviceId;
+}
+
+FString TutorialProjectUtilities::GetDeviceId()
+{
+	FString DeviceId = FPlatformMisc::GetDeviceId();
+	if (DeviceId.IsEmpty())
+	{
+		PRAGMA_DISABLE_DEPRECATION_WARNINGS
+		const TArray<uint8> MacAddr = FPlatformMisc::GetMacAddress();
+		PRAGMA_ENABLE_DEPRECATION_WARNINGS
+		FString MacAddressString;
+		for (TArray<uint8>::TConstIterator it(MacAddr);it;++it)
+		{
+			MacAddressString += FString::Printf(TEXT("%02x"),*it);
+		}
+		DeviceId = FMD5::HashAnsiString(*MacAddressString);
+
+		if(DeviceId.IsEmpty())
+		{
+			DeviceId = *LocalDeviceId();
+			UE_LOG(LogTemp, Warning, TEXT("LocalDeviceId Device Id: %s"), *DeviceId);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FMD5::HashAnsiString(*MacAddressString) Device Id: %s"), *DeviceId);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("FPlatformMisc::GetDeviceId() Device Id: %s"), *DeviceId);
+	}
+	return  DeviceId;
 }
 
 void TutorialProjectUtilities::GetImageFromURL(const FString& Url, const FString& ImageId, const FOnImageReceived& OnReceived)

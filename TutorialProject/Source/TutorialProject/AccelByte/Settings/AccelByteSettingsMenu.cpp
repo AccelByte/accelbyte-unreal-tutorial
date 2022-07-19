@@ -17,12 +17,21 @@
 #include "GenericPlatform/GenericWindow.h"
 #include "TutorialProject/TutorialProjectUtilities.h"
 
+#define FULLSCREEN_COMBO_BOX_INDEX 0
+#define FULLSCREEN_COMBO_BOX_ITEM "Fullscreen"
+#define WINDOWED_COMBO_BOX_INDEX 1
+#define WINDOWED_COMBO_BOX_ITEM "Windowed"
+
 void UAccelByteSettingsMenu::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	Cbs_DisplayMode->SetSelectedIndex(LatestGameSettingsState.DisplayMode);
-	Cbs_CloudSaveState->SetSelectedIndex(LatestGameSettingsState.CloudSaveState);
+	Cbs_DisplayMode->ClearOptions();
+	Cbs_DisplayMode->AddOption(FULLSCREEN_COMBO_BOX_ITEM);
+	Cbs_DisplayMode->AddOption(WINDOWED_COMBO_BOX_ITEM);
+
+	Cbs_DisplayMode->SetSelectedIndex(LatestGameSettingsState.DisplayMode == EWindowMode::Fullscreen ? FULLSCREEN_COMBO_BOX_INDEX : WINDOWED_COMBO_BOX_INDEX);
+	Cbs_CloudSaveState->SetSelectedIndex(LatestGameSettingsState.bCloudSaveState);
 
 	Cbs_DisplayMode->OnSelectionChanged.AddUniqueDynamic(this, &UAccelByteSettingsMenu::OnDisplayModeChanged);
 	Cbs_CloudSaveState->OnSelectionChanged.AddUniqueDynamic(this, &UAccelByteSettingsMenu::OnCloudSaveStateChanged);
@@ -38,7 +47,14 @@ void UAccelByteSettingsMenu::OnDisplayModeChanged(FString SelectedItem, ESelectI
 {
 	if (SelectionType == ESelectInfo::Type::OnMouseClick)
 	{
-		CurrentGameSettingsState.DisplayMode = Cbs_DisplayMode->GetSelectedIndex();
+		if (SelectedItem == FULLSCREEN_COMBO_BOX_ITEM)
+		{
+			CurrentGameSettingsState.DisplayMode = EWindowMode::Type::Fullscreen;
+		}
+		else if (SelectedItem == WINDOWED_COMBO_BOX_ITEM)
+		{
+			CurrentGameSettingsState.DisplayMode = EWindowMode::Type::Windowed;
+		}
 	}
 }
 
@@ -46,7 +62,7 @@ void UAccelByteSettingsMenu::OnCloudSaveStateChanged(FString SelectedItem, ESele
 {
 	if (SelectionType == ESelectInfo::Type::OnMouseClick)
 	{
-		CurrentGameSettingsState.CloudSaveState = Cbs_CloudSaveState->GetSelectedIndex();
+		CurrentGameSettingsState.bCloudSaveState = static_cast<bool>(Cbs_CloudSaveState->GetSelectedIndex());
 	}
 }
 
@@ -55,23 +71,23 @@ void UAccelByteSettingsMenu::OnSaveChangesButtonClicked()
 	ShowPopUp(EPopUpType::Loading);
 		
 	FJsonObject RecordRequest;
-	RecordRequest.SetNumberField(TutorialProjectUtilities::CloudSaveJsonKeyA, CurrentGameSettingsState.DisplayMode);
-	RecordRequest.SetNumberField(TutorialProjectUtilities::CloudSaveJsonKeyB, CurrentGameSettingsState.CloudSaveState);
+	RecordRequest.SetNumberField(TutorialProjectUtilities::CloudSaveJsonKeyA, static_cast<uint8>(CurrentGameSettingsState.DisplayMode));
+	RecordRequest.SetNumberField(TutorialProjectUtilities::CloudSaveJsonKeyB, CurrentGameSettingsState.bCloudSaveState);
 	
-	FRegistry::CloudSave.SaveUserRecord(TutorialProjectUtilities::GameSettingCloudSaveKey, RecordRequest, false, FVoidHandler::CreateLambda([this]()
+	FRegistry::CloudSave.SaveUserRecord(TutorialProjectUtilities::GameSettingCloudSaveKey, false, RecordRequest, FVoidHandler::CreateWeakLambda(this, [this]()
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Success Save User Record"));
+		UE_LOG(LogTemp, Log, TEXT("Success Save User Record"));
 
 		LatestGameSettingsState.DisplayMode = CurrentGameSettingsState.DisplayMode;
-		LatestGameSettingsState.CloudSaveState = CurrentGameSettingsState.CloudSaveState;
+		LatestGameSettingsState.bCloudSaveState = CurrentGameSettingsState.bCloudSaveState;
 
 		InitDisplaySettings(LatestGameSettingsState.DisplayMode);
 		
 		ShowPopUp(EPopUpType::Saved);
 	}),
-	FErrorHandler::CreateLambda([this](int32 ErrorCode, const FString& ErrorMessage)
+	FErrorHandler::CreateWeakLambda(this, [this](int32 ErrorCode, const FString& ErrorMessage)
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Save User Record Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage));
+		UE_LOG(LogTemp, Error, TEXT("Save User Record Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 		
 		ShowPopUp(EPopUpType::None);
 	}));
@@ -84,7 +100,7 @@ void UAccelByteSettingsMenu::OnBackButtonClicked()
 
 void UAccelByteSettingsMenu::OnBackToMainMenuButtonClicked()
 {
-	if (CurrentGameSettingsState.DisplayMode != LatestGameSettingsState.DisplayMode || CurrentGameSettingsState.CloudSaveState != LatestGameSettingsState.CloudSaveState)
+	if (CurrentGameSettingsState.DisplayMode != LatestGameSettingsState.DisplayMode || CurrentGameSettingsState.bCloudSaveState != LatestGameSettingsState.bCloudSaveState)
 	{
 		ShowPopUp(EPopUpType::Unsaved);
 	}
@@ -99,7 +115,7 @@ void UAccelByteSettingsMenu::OnBackToMainMenuButtonClicked()
 void UAccelByteSettingsMenu::OnProceedToMainMenuButtonClicked()
 {
 	CurrentGameSettingsState.DisplayMode = LatestGameSettingsState.DisplayMode;
-	CurrentGameSettingsState.CloudSaveState = LatestGameSettingsState.CloudSaveState;
+	CurrentGameSettingsState.bCloudSaveState = LatestGameSettingsState.bCloudSaveState;
 	
 	B_SaveState->SetVisibility(ESlateVisibility::Collapsed);
 	WS_SaveState->SetActiveWidget(Cast<UWidget>(CT_LoadingThrobber));
@@ -114,21 +130,20 @@ void UAccelByteSettingsMenu::OnKeepEditingButtonClicked()
 	ShowPopUp(EPopUpType::None);
 }
 
-void UAccelByteSettingsMenu::InitDisplaySettings(int DisplayModeIndex)
+void UAccelByteSettingsMenu::InitDisplaySettings(const EWindowMode::Type& WindowMode)
 {
 	CheckGameSettingsAndHUDIsValid();
 	
-	const EWindowMode::Type ScreenMode = static_cast<EWindowMode::Type>(DisplayModeIndex);
-	GameUserSettings->SetFullscreenMode(ScreenMode);
+	GameUserSettings->SetFullscreenMode(WindowMode);
 
-	const FIntPoint NewResolution = ScreenMode == EWindowMode::Type::Fullscreen ? GameUserSettings->GetDesktopResolution() : TutorialProjectUtilities::DefaultResolutionSettings;
+	const FIntPoint NewResolution = WindowMode == EWindowMode::Type::Fullscreen ? GameUserSettings->GetDesktopResolution() : TutorialProjectUtilities::DefaultResolutionSettings;
 	GameUserSettings->SetScreenResolution(NewResolution);
 
 	GameUserSettings->ValidateSettings();
 	GameUserSettings->ConfirmVideoMode();
 	GameUserSettings->ApplySettings(false);
 		
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString::Printf(TEXT("res x: %d | res y: %d"), GameUserSettings->GetScreenResolution().X, GameUserSettings->GetScreenResolution().Y));
+	UE_LOG(LogTemp, Log, TEXT("res x: %d | res y: %d"), GameUserSettings->GetScreenResolution().X, GameUserSettings->GetScreenResolution().Y);
 }
 
 void UAccelByteSettingsMenu::ShowPopUp(const EPopUpType& PopUpType) const
@@ -153,28 +168,28 @@ void UAccelByteSettingsMenu::ShowPopUp(const EPopUpType& PopUpType) const
 
 void UAccelByteSettingsMenu::SaveDefaultGameSettings()
 {
-	CurrentGameSettingsState.DisplayMode = 2;
-	CurrentGameSettingsState.CloudSaveState = 0;
+	CurrentGameSettingsState.DisplayMode = TutorialProjectUtilities::DefaultDisplaySettings;
+	CurrentGameSettingsState.bCloudSaveState = static_cast<bool>(TutorialProjectUtilities::DefaultCloudSaveStateIndex);
 	
 	FJsonObject RecordRequest;
-	RecordRequest.SetNumberField(TutorialProjectUtilities::CloudSaveJsonKeyA, CurrentGameSettingsState.DisplayMode);
-	RecordRequest.SetNumberField(TutorialProjectUtilities::CloudSaveJsonKeyB, CurrentGameSettingsState.CloudSaveState);
+	RecordRequest.SetNumberField(TutorialProjectUtilities::CloudSaveJsonKeyA, static_cast<uint8>(CurrentGameSettingsState.DisplayMode));
+	RecordRequest.SetNumberField(TutorialProjectUtilities::CloudSaveJsonKeyB, CurrentGameSettingsState.bCloudSaveState);
 			
-	FRegistry::CloudSave.SaveUserRecord(TutorialProjectUtilities::GameSettingCloudSaveKey, RecordRequest, false, FVoidHandler::CreateLambda([this]()
+	FRegistry::CloudSave.SaveUserRecord(TutorialProjectUtilities::GameSettingCloudSaveKey, false, RecordRequest, FVoidHandler::CreateWeakLambda(this, [this]()
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Success Save User Record"));
+		UE_LOG(LogTemp, Log, TEXT("Success Save User Record"));
 
 		LatestGameSettingsState.DisplayMode = CurrentGameSettingsState.DisplayMode;
-		LatestGameSettingsState.CloudSaveState = CurrentGameSettingsState.CloudSaveState;
+		LatestGameSettingsState.bCloudSaveState = CurrentGameSettingsState.bCloudSaveState;
 
 		InitDisplaySettings(LatestGameSettingsState.DisplayMode);
 		
-		TutorialMenuHUD->OpenMainMenu();
+		TutorialMenuHUD->InitUserProfile();
 		this->RemoveFromParent();
 	}),
-	FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+	FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Save User Record Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage));
+		UE_LOG(LogTemp, Error, TEXT("Save User Record Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 	}));
 }
 
@@ -194,48 +209,48 @@ void UAccelByteSettingsMenu::CheckGameSettingsAndHUDIsValid()
 
 void UAccelByteSettingsMenu::InitGameSettings()
 {	
-	FRegistry::CloudSave.GetUserRecord(TutorialProjectUtilities::GameSettingCloudSaveKey, THandler<FAccelByteModelsUserRecord>::CreateLambda([this](const FAccelByteModelsUserRecord& Result)
+	FRegistry::CloudSave.GetUserRecord(TutorialProjectUtilities::GameSettingCloudSaveKey, THandler<FAccelByteModelsUserRecord>::CreateWeakLambda(this, [this](const FAccelByteModelsUserRecord& Result)
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Get user record Success"));
+		UE_LOG(LogTemp, Log, TEXT("Get user record Success"));
 
 		bool bIsCloudSaveFound = false;
-		int32 DisplayMode;
-		if (Result.Value.TryGetNumberField(TutorialProjectUtilities::CloudSaveJsonKeyA, DisplayMode))
+		int32 DisplayModeIndex;
+		if (Result.Value.JsonObject->TryGetNumberField(TutorialProjectUtilities::CloudSaveJsonKeyA, DisplayModeIndex))
 		{
 			int32 CloudSaveState;
-			if (Result.Value.TryGetNumberField(TutorialProjectUtilities::CloudSaveJsonKeyB, CloudSaveState))
+			if (Result.Value.JsonObject->TryGetNumberField(TutorialProjectUtilities::CloudSaveJsonKeyB, CloudSaveState))
 			{
 				bIsCloudSaveFound = true;
-				InitDisplaySettings(DisplayMode);
+				InitDisplaySettings(static_cast<EWindowMode::Type>(DisplayModeIndex));
 
-				CurrentGameSettingsState.DisplayMode = DisplayMode;
-				CurrentGameSettingsState.CloudSaveState = CloudSaveState;
-				LatestGameSettingsState.DisplayMode = DisplayMode;
-				LatestGameSettingsState.CloudSaveState = CloudSaveState;
+				CurrentGameSettingsState.DisplayMode = DisplayModeIndex == static_cast<uint8>(EWindowMode::Type::Fullscreen) ? EWindowMode::Type::Fullscreen : EWindowMode::Type::Windowed;
+				CurrentGameSettingsState.bCloudSaveState = static_cast<bool>(CloudSaveState);
+				LatestGameSettingsState.DisplayMode = DisplayModeIndex == static_cast<uint8>(EWindowMode::Type::Fullscreen) ? EWindowMode::Type::Fullscreen : EWindowMode::Type::Windowed;
+				LatestGameSettingsState.bCloudSaveState = static_cast<bool>(CloudSaveState);
 
-				TutorialMenuHUD->InitMainMenu();
+				TutorialMenuHUD->InitUserProfile();
 				this->RemoveFromParent();
 			}
 			else
 			{
-				TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("There is no get value from result of number field"));
+				UE_LOG(LogTemp, Error, TEXT("There is no get value from result of number field"));
 			}
 		}
 		else
 		{
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("There is no get value from result of number field"));
+			UE_LOG(LogTemp, Error, TEXT("There is no get value from result of number field"));
 		}
 
 		if (!bIsCloudSaveFound)
 		{
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Warning, TEXT("Cloud save found with no entry, saving initial data"));
+			UE_LOG(LogTemp, Warning, TEXT("Cloud save found with no entry, saving initial data"));
 			
 			SaveDefaultGameSettings();
 		}
 	}),
-	FErrorHandler::CreateLambda([this](int32 ErrorCode, const FString& ErrorMessage)
+	FErrorHandler::CreateWeakLambda(this, [this](int32 ErrorCode, const FString& ErrorMessage)
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Get User Record Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage));
+		UE_LOG(LogTemp, Error, TEXT("Get User Record Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 
 		SaveDefaultGameSettings();
 	}));
@@ -247,3 +262,8 @@ void UAccelByteSettingsMenu::InitDefaultGameSettings()
 
 	InitDisplaySettings(TutorialProjectUtilities::DefaultDisplaySettings);
 }
+
+#undef FULLSCREEN_COMBO_BOX_INDEX
+#undef FULLSCREEN_COMBO_BOX_ITEM
+#undef WINDOWED_COMBO_BOX_INDEX
+#undef WINDOWED_COMBO_BOX_ITEM

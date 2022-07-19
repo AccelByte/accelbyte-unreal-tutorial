@@ -10,6 +10,7 @@
 #include "Models/AccelByteEcommerceModels.h"
 #include "TutorialMenuHUD.generated.h"
 
+class UAccelByteUserProfile;
 class UAccelByteStore;
 class UAccelByteAuth;
 class UAccelByteLegalDocument;
@@ -29,6 +30,8 @@ class UAccelByteWallet;
 class UAccelByteOrder;
 class UAccelByteOrderPriceEntry;
 class UAccelByteOrderPurchaseEntry;
+class UAccelByteLeaderboard;
+class UAccelByteAchievement;
 
 /**
  * Menu Widget Controller. All Widget functionality controlled here.
@@ -68,6 +71,11 @@ public:
 	* @brief Init game settings to call cloud save services.
 	*/
 	void InitGameSettings();
+
+	/**
+	* @brief Check User Profile. If there is no user profile, then we expect the user to create their own profile.
+	*/
+	void InitUserProfile();
 	
 	/**
 	* @brief Shows Lobby Menu which adds Party Menu in Sb_Party and destroys Main Menu
@@ -118,6 +126,18 @@ public:
 	*/
 	UFUNCTION()
 	void OpenOrderConfirmationPopUp(const FAccelByteModelsItemInfo& ItemInfo);
+	
+	/**
+	* @brief Shows Leaderboard Menu on screen
+	*/
+	UFUNCTION()
+	void OpenLeaderboardMenu();
+
+	/**
+	* @brief Shows Achievement Menu on screen
+	*/
+	UFUNCTION()
+	void OpenAchievementMenu();
 
 	/**
 	* @brief Destroys Main Menu widget
@@ -127,6 +147,7 @@ public:
 	/**
 	* @brief Destroys Lobby Menu widget and shows Main Menu
 	*/
+	UFUNCTION()
 	void CloseLobbyMenu();
 
 	/**
@@ -176,6 +197,18 @@ public:
 	* @brief Refreshes party entries and close lobby menu
 	*/
 	void CloseStoreMenu();
+	
+	/**
+	* @brief Destroys Leaderboard Menu Widget
+	*/
+	UFUNCTION()
+	void CloseLeaderboardMenu();
+
+	/**
+	* @brief Destroys Achievement Menu Widget
+	*/
+	UFUNCTION()
+	void CloseAchievementMenu();
 
 protected:
 	
@@ -276,6 +309,12 @@ protected:
 	TSubclassOf<UAccelByteSettingsMenu> SettingsMenuClass;
 
 	/**
+	* @brief User Profile widget class
+	*/
+	UPROPERTY(EditDefaultsOnly)
+	TSubclassOf<UAccelByteUserProfile> UserProfileClass;
+
+	/**
 	* @brief Wallet widget class
 	*/
 	UPROPERTY(EditDefaultsOnly)
@@ -297,7 +336,20 @@ protected:
 	* @brief Order purchase button widget class
 	*/
 	UPROPERTY(EditDefaultsOnly)
-	TSubclassOf<UAccelByteOrderPurchaseEntry> OrderConfirmationPurchaseEntryClass;	
+	TSubclassOf<UAccelByteOrderPurchaseEntry> OrderConfirmationPurchaseEntryClass;
+	
+	/**
+	* @brief Leaderboard Menu widget class
+	*/
+	UPROPERTY(EditDefaultsOnly)
+	TSubclassOf<UAccelByteLeaderboard> LeaderboardMenuClass;
+
+	/**
+	* @brief Achievement Menu widget class
+	*/
+	UPROPERTY(EditDefaultsOnly)
+	TSubclassOf<UAccelByteAchievement> AchievementMenuClass;
+	
 public:
 	
 	/**
@@ -358,7 +410,13 @@ public:
 	/**
 	* @brief Getter for Order Popup widget
 	*/
-	UAccelByteOrder* GetOrderConfirmationMenu() const {return OrderConfirmationMenu; }	
+	UAccelByteOrder* GetOrderConfirmationMenu() const {return OrderConfirmationMenu; }
+
+	/**
+	* @brief Getter for FindMatchmaking Popup widget
+	*/
+	UAccelByteUserProfile* GetUserProfileMenu() const {return UserProfileMenu; }
+	
 	/**
 	* @brief Getter for Matchmaking Player Entry Class
 	*/
@@ -390,10 +448,20 @@ public:
 	TSubclassOf<UAccelByteEntitlementEntry> GetInventoryItemClass() const {return InventoryItemClass; }
 
 	/**
-	 * @brief Getter for Settings Menu widget
-	 */
+	* @brief Getter for Settings Menu widget
+	*/
 	UAccelByteSettingsMenu* GetSettingsMenu() const {return SettingsMenu; }
-	
+
+	/**
+	* @brief Getter for Leaderboard Menu widget
+	*/
+	UAccelByteLeaderboard* GetLeaderboardMenu() const {return LeaderboardMenu; }
+
+	/**
+	* @brief Getter for Achievement Menu widget
+	*/
+	UAccelByteAchievement* GetAchievementMenu() const {return AchievementMenu; }
+
 private:
 	
 	/**
@@ -479,6 +547,12 @@ private:
 	*/
 	UPROPERTY()
 	UAccelByteSettingsMenu* SettingsMenu;
+	
+	/**
+	* @brief User Profile Menu pointer
+	*/
+	UPROPERTY()
+	UAccelByteUserProfile* UserProfileMenu;
 
 	/**
 	* @brief Virtual Currency wallet widget pointer
@@ -491,4 +565,16 @@ private:
 	*/
 	UPROPERTY()
 	UAccelByteOrder* OrderConfirmationMenu;
+	
+	/**
+	* @brief Leaderboard Menu widget pointer
+	*/
+	UPROPERTY()
+	UAccelByteLeaderboard* LeaderboardMenu;
+
+	/**
+	* @brief Achievement Menu widget pointer
+	*/
+	UPROPERTY()
+	UAccelByteAchievement* AchievementMenu;
 };

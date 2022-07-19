@@ -10,11 +10,9 @@
 #include "Core/AccelByteRegistry.h"
 #include "Models/AccelByteEcommerceModels.h"
 #include "TutorialProject/TutorialMenuHUD.h"
-#include "TutorialProject/TutorialProjectUtilities.h"
 #include "TutorialProject/AccelByte/Wallet/AccelByteWallet.h"
 #include "AccelByteStoreItemEntry.h"
 #include "Api/AccelByteCategoryApi.h"
-
 #include "Components/Button.h"
 #include "Components/Overlay.h"
 #include "Components/UniformGridPanel.h"
@@ -36,14 +34,14 @@ void UAccelByteStore::NativeConstruct()
 		// Get Categories
 		FRegistry::Category.GetRootCategories(
 			"en",
-			THandler<TArray<FAccelByteModelsCategoryInfo>>::CreateLambda(
+			THandler<TArray<FAccelByteModelsCategoryInfo>>::CreateWeakLambda(this, 
 				[this](const TArray<FAccelByteModelsCategoryInfo> Result)
 				{
 					InitCategoryButtons(Result);
 				}),
-			FErrorHandler::CreateLambda([](int32 ErrorCode, FString ErrorMessage)
+			FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, FString ErrorMessage)
 			{
-				TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("ERROR: Failed to get Store Item list!"));
+				UE_LOG(LogTemp, Error, TEXT("[Store] Failed to get Store Item list!"));
 			})
 		);
 	}
@@ -51,7 +49,7 @@ void UAccelByteStore::NativeConstruct()
 	LoadItems("");
 }
 
-void UAccelByteStore::UpdateWallet()
+void UAccelByteStore::UpdateWallet() const
 {
 	WB_Wallet->UpdateCurrency();
 }
@@ -81,14 +79,14 @@ void UAccelByteStore::LoadItems(const FString& StoreCategoryPath)
 		StoreItemCriteria,
 		0,
 		0,
-		THandler<FAccelByteModelsItemPagingSlicedResult>::CreateLambda(
+		THandler<FAccelByteModelsItemPagingSlicedResult>::CreateWeakLambda(this, 
 			[this](const FAccelByteModelsItemPagingSlicedResult Result)
 			{
 				PopulateGridPanel(Result);
 			}),
-		FErrorHandler::CreateLambda([](int32 ErrorCode, FString ErrorMessage)
+		FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, FString ErrorMessage)
 		{
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("ERROR: Failed to get Store Item list!"));
+			UE_LOG(LogTemp, Error, TEXT("[Store] Failed to get Store Item list!"));
 		})
 	);
 }

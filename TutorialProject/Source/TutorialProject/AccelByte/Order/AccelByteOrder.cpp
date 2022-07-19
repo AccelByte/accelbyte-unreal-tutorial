@@ -12,7 +12,6 @@
 #include "Core/AccelByteRegistry.h"
 #include "Api/AccelByteOrderApi.h"
 #include "TutorialProject/AccelByte/Store/AccelByteStore.h"
-
 #include "Components/HorizontalBox.h"
 #include "Components/Button.h"
 #include "Components/CircularThrobber.h"
@@ -65,7 +64,7 @@ void UAccelByteOrder::InitPopUp(const FAccelByteModelsItemInfo& ItemInfo)
 		TutorialProjectUtilities::GetImageFromURL(
 			ItemInfo.Images[0].SmallImageUrl,
 			OrderImageId,
-			FOnImageReceived::CreateLambda(
+			FOnImageReceived::CreateWeakLambda(this, 
 				[this](const FCacheBrush Result){
 					Img_Item->SetBrush(*Result.Get());
 				}));
@@ -145,29 +144,29 @@ void UAccelByteOrder::LoadPaymentGateway(const FString& Url, const FString& Orde
 	const TSharedPtr<IWebBrowserCookieManager> CookieManager = IWebBrowserModule::Get().GetSingleton()->GetCookieManager();
 	if (CookieManager.IsValid())
 	{
-		CookieManager->SetCookie(Url, Cookie, [this, Url, OrderNo](bool Success)
+		CookieManager->SetCookie(Url, Cookie, [this, Url, OrderNo](bool bIsSuccess)
 		{
 			WBrowser_Payment->LoadURL(Url);
 			
 			// determine payment success by manually checking order status periodically
-			GetOwningPlayer()->GetWorldTimerManager().SetTimer(OrderStatusCheckTimer, FTimerDelegate::CreateLambda([this, OrderNo]()
+			GetOwningPlayer()->GetWorldTimerManager().SetTimer(OrderStatusCheckTimer, FTimerDelegate::CreateWeakLambda(this, [this, OrderNo]()
 			{
 				FRegistry::Order.GetUserOrder(
 					OrderNo,
-			        THandler<FAccelByteModelsOrderInfo>::CreateLambda([this](const FAccelByteModelsOrderInfo& Response)
+			        THandler<FAccelByteModelsOrderInfo>::CreateWeakLambda(this, [this](const FAccelByteModelsOrderInfo& Response)
 					{
-					    TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString::Printf(TEXT("Get order status")));
+			        	UE_LOG(LogTemp, Log, TEXT("Get order status"));
 					    
 						const EAccelByteOrderStatus OrderStatus = Response.Status;
 						if (OrderStatus == EAccelByteOrderStatus::FULFILLED)
 						{
-						    TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString::Printf(TEXT("Order fulfilled")));
+							UE_LOG(LogTemp, Log, TEXT("Order fulfilled"));
 						    
 							GetOwningPlayer()->GetWorldTimerManager().ClearTimer(OrderStatusCheckTimer);
 							TutorialMenuHUD->GetStoreMenu()->UpdateWallet();
 							SwitchPopUpWidget(EOrderPopUpType::PURCHASE_RESULT);
 						}}),
-					FErrorHandler::CreateLambda([this](int ErrorCode, const FString& ErrorMessage)
+					FErrorHandler::CreateWeakLambda(this, [this](int ErrorCode, const FString& ErrorMessage)
 					{
 						GetOwningPlayer()->GetWorldTimerManager().ClearTimer(OrderStatusCheckTimer);
 						OnPurchaseFailed(ErrorMessage);

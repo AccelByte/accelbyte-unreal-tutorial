@@ -12,83 +12,39 @@ void UTutorialProjectGameInstance::Init()
 {
 	Super::Init();
 
+	ServerManager = UAccelByteServerManager::CreateAccelByteServer(this);
+
 	if (IsRunningDedicatedServer())
 	{
 		UE_LOG(LogTemp, Log, TEXT("Check If Running on DS"));
 		
-		GameServerLogin();
+		ServerManager->GameServerLogin();
+	}
+	else
+	{
+		if (!AccelByteAchievementPopUp)
+		{
+			AccelByteAchievementPopUp = CreateWidget<UAccelByteAchievementPopUp>(this, AccelByteAchievementPopUpClass.Get());
+			check(AccelByteAchievementPopUp);
+		}
 	}
 }
 
 void UTutorialProjectGameInstance::Shutdown()
 {
-	if (FRegistry::Lobby.IsConnected())
-	{
-		FRegistry::Lobby.SendLeavePartyRequest();
-	}
-	
 	if (IsRunningDedicatedServer())
 	{
-		ServerManager->ForgetAllCredentials();
-		
-		if (ServerManager->CheckCommandLineArgument(TutorialProjectUtilities::LaunchArgsLocalDS))
-		{
-			ServerManager->DeregisterLocalServerFromDSM(FDeregisterLocalServerFromDSMSuccess::CreateLambda([]()
-			{
-				UE_LOG(LogTemp, Log, TEXT("Successfully DeregisterLocalServerFromDSM"));
-			}),
-			FSendFailedInfo::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
-			{
-				UE_LOG(LogTemp, Error, TEXT("Error DeregisterLocalServerFromDSM : Code: %d, Reason: %s"), ErrorCode, *ErrorMessage);
-			}));
-		}
-		else
-		{
-			ServerManager->SendShutdownToDSM(FSendShutDownToDSMSuccess::CreateLambda([]()
-			{
-				UE_LOG(LogTemp, Log, TEXT("Successfully DeregisterLocalServerFromDSM"));
-			}),
-			FSendFailedInfo::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
-			{
-				UE_LOG(LogTemp, Error, TEXT("Error DeregisterLocalServerFromDSM : Code: %d, Reason: %s"), ErrorCode, *ErrorMessage);
-			}));
-		}
+		ServerManager->ShutDown();
 	}
 	
 	Super::Shutdown();
 }
 
-void UTutorialProjectGameInstance::GameServerLogin()
+UAccelByteAchievementPopUp* UTutorialProjectGameInstance::GetAchievementPopUp() const
 {
-	ServerManager = UAccelByteServerManager::CreateAccelByteServer(this);
-	
-	ServerManager->LoginWithCredentials(FLoginWithCredentialsSuccess::CreateLambda([this]()
+	if (AccelByteAchievementPopUp)
 	{
-		if (ServerManager->CheckCommandLineArgument(TutorialProjectUtilities::LaunchArgsLocalDS))
-		{
-			ServerManager->RegisterLocalServerToDSM(FRegisterLocalServerToDSMSuccess::CreateLambda([]()
-			{
-				UE_LOG(LogTemp, Log, TEXT("Local Server Running"));
-			}),
-				FSendFailedInfo::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
-			{
-				UE_LOG(LogTemp, Error, TEXT("Local Server Failed Error %i Message %s"), ErrorCode, *ErrorMessage);
-			}));
-		}
-		else
-		{
-			ServerManager->RegisterServerToDSM(FRegisterServerToDSMSuccess::CreateLambda([]()
-			{
-				UE_LOG(LogTemp, Log, TEXT("Successfully Registered Server to DSM"));
-			}),
-			FSendFailedInfo::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
-			{
-				UE_LOG(LogTemp, Error, TEXT("Error RegisterServerToDSM : Code: %d, Reason: %s"), ErrorCode, *ErrorMessage);
-			}));
-		}
-	}),
-	FSendFailedInfo::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
-	{
-		UE_LOG(LogTemp, Error, TEXT("Error LoginWithCredentials : Code: %d, Reason: %s"), ErrorCode, *ErrorMessage);
-	}));
+		return AccelByteAchievementPopUp;
+	}
+	return nullptr;
 }

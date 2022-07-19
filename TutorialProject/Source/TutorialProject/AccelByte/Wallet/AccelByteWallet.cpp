@@ -12,17 +12,17 @@ void UAccelByteWallet::UpdateCurrency()
 {
 	FRegistry::Wallet.GetWalletInfoByCurrencyCode(
 		TutorialProjectUtilities::VirtualCurrencyCode,
-		THandler<FAccelByteModelsWalletInfo>::CreateLambda(
+		THandler<FAccelByteModelsWalletInfo>::CreateWeakLambda(this, 
 			[this](const FAccelByteModelsWalletInfo& Response)
 			{
-				TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString::Printf(TEXT("Success Get Wallet Profile: %d"), Response.Balance));
+				UE_LOG(LogTemp, Log, TEXT("Success Get Wallet Profile: %d"), Response.Balance);
 				Tb_Balance->SetText(FText::AsNumber(Response.Balance));
 			}
 		),
-		FErrorHandler::CreateLambda(
+		FErrorHandler::CreateWeakLambda(this, 
 			[](int32 ErrorCode, const FString& ErrorMessage)
 			{
-				TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString::Printf(TEXT("Fail Get Wallet Profile: %s (%d)"), &ErrorMessage, ErrorCode));
+				UE_LOG(LogTemp, Log, TEXT("Fail Get Wallet Profile: %s (%d)"), &ErrorMessage, ErrorCode);
 			}
 		)
 	);

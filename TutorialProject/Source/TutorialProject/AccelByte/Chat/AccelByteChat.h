@@ -17,8 +17,6 @@ class UVerticalBox;
 class UEditableText;
 class UScrollBox;
 
-using namespace AccelByte::Api;
-
 /**
  * UserWidget class to handle general chat interactions.
  */
@@ -35,6 +33,11 @@ protected:
 	 * @brief Native Construct override for AccelByte Chat.
 	 */
 	virtual void NativeConstruct() override;
+
+	/**
+	 * @brief Spawn Default Global Message
+	 */
+	void SetDefaultGlobalTabMessage();
 
 private:
 	
@@ -199,13 +202,6 @@ public:
 private:
 	
 	/**
-	 * @brief Refresh chat tab by their type.
-	 * @param ChatTabType The category for chat.
-	 * @param UserId Target user id for private message
-	 */
-	void SwitchChatTab(const EChatTabType& ChatTabType, const FString& UserId = "");
-	
-	/**
 	 * @brief Send a chat message.
 	 * @param ChatMessage message to send.
 	 */
@@ -229,6 +225,13 @@ private:
 	void AddMessageToArray(const EChatTabType& ChatTabType, const FString& ChatMessage, const FString& UserId = "");
 	
 public:
+
+	/**
+	* @brief Refresh chat tab by their type.
+	* @param ChatTabType The category for chat.
+	* @param UserId Target user id for private message
+	*/
+	void SwitchChatTab(const EChatTabType& ChatTabType, const FString& UserId = "");
 	
 	/**
 	 * @brief Clear all chat messages.

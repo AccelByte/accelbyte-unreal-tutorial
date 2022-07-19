@@ -8,6 +8,7 @@
 #include "Components/TextBlock.h"
 #include "Components/ScrollBox.h"
 #include "Components/HorizontalBox.h"
+#include "Components/Overlay.h"
 #include "Components/SizeBox.h"
 #include "Components/WidgetSwitcher.h"
 
@@ -28,7 +29,7 @@ void UAccelByteGame::IncreaseScore()
 	Cast<ATutPlayerControllerCountGame>(GetOwningPlayer())->Server_RequestScoreIncrease();
 }
 
-void UAccelByteGame::InitCountdown(uint8 PartyId)
+void UAccelByteGame::InitCountdown(const EPartyId& PartyId)
 {
 	MyPartyId = PartyId;
 	Hb_WaitAllPlayersReady->SetVisibility(ESlateVisibility::Collapsed);
@@ -52,39 +53,43 @@ void UAccelByteGame::InitScoreboard(const TArray<FPlayerData>& CurrentPlayerData
 		ScoreboardEntryWidget->InitData(PlayerInfo);
 		ScoreEntryWidgetMap.Add(PlayerInfo.UserId, ScoreboardEntryWidget.Get());
 		
-		if (PlayerInfo.PartyId == 0)
+		if (PlayerInfo.PartyId == EPartyId::PartyA)
 		{
 			ScB_Scoreboard_Team_A->AddChild(ScoreboardEntryWidget.Get());
 		}
-		else
+		else if (PlayerInfo.PartyId == EPartyId::PartyB)
 		{
 			ScB_Scoreboard_Team_B->AddChild(ScoreboardEntryWidget.Get());
 		}
 	}
 }
 
-void UAccelByteGame::UpdateCountdownTimer(const int& CountdownTimerLeft)
+void UAccelByteGame::UpdateCountdownTimer(const int& CountdownTimerLeft) const
 {
 	if (CountdownTimerLeft != 0)
 	{
-		T_Countdown->SetText(FText::FromString(FString::FromInt(CountdownTimerLeft)));
+		Tb_Countdown->SetText(FText::FromString(FString::FromInt(CountdownTimerLeft)));
 	}
 	else
 	{
-		T_Countdown->SetText(FText::FromString(TEXT("GO !!")));
+		Tb_Countdown->SetText(FText::FromString(TEXT("GO !!")));
 	}
 }
 
-void UAccelByteGame::UpdateTimer(const int& TimeLeft)
+void UAccelByteGame::UpdateTimer(const int& TimeLeft) const
 {
-	FString TimeString = "Timeleft: " +  FString::FromInt(TimeLeft);
-	T_Timer->SetText(FText::FromString(TimeString));
+	const FString TimeString = "Time Left: " +  FString::FromInt(TimeLeft);
+	Tb_Timer->SetText(FText::FromString(TimeString));
 }
 
 bool UAccelByteGame::IsUserInScoreEntryWidgetValid(const FString& PlayerId) const
 {
 	bool bIsUserInEntryMap = ScoreEntryWidgetMap.Contains(PlayerId);
-	bool bIsEntryNull = ScoreEntryWidgetMap[PlayerId] == nullptr;
+	bool bIsEntryNull = false;
+	if (ScoreEntryWidgetMap.Num() > 0)
+	{
+		bIsEntryNull = ScoreEntryWidgetMap[PlayerId] == nullptr;
+	}
 	
 	return !bIsEntryNull && bIsUserInEntryMap;
 }
@@ -95,11 +100,11 @@ void UAccelByteGame::UpdateScore(const FString& PlayerId, const FPlayerData& Cur
 	{
 		ScoreEntryWidgetMap[PlayerId]->SetScore(CurrentPlayerInfo.Score);
 		
-		if (CurrentPlayerInfo.PartyId == 0)
+		if (CurrentPlayerInfo.PartyId == EPartyId::PartyA)
 		{
 			TeamAScore += IncrementScore;
 		}
-		else
+		else if (CurrentPlayerInfo.PartyId == EPartyId::PartyB)
 		{
 			TeamBScore += IncrementScore;
 		}
@@ -109,29 +114,41 @@ void UAccelByteGame::UpdateScore(const FString& PlayerId, const FPlayerData& Cur
 	}
 }
 
-void UAccelByteGame::GameOver(const uint8 WinnerPartyId)
+void UAccelByteGame::GameOver(const EWinnerParty& WinnerParty)
 {
 	WS_Team_A_WinOrLose->SetVisibility(ESlateVisibility::HitTestInvisible);
 	WS_Team_B_WinOrLose->SetVisibility(ESlateVisibility::HitTestInvisible);
 
-	if (WinnerPartyId == 0)
+	if (WinnerParty == static_cast<EWinnerParty>(MyPartyId))
 	{
-		WS_Team_A_WinOrLose->SetActiveWidgetIndex(0);
-		WS_Team_B_WinOrLose->SetActiveWidgetIndex(1);
+		WS_WinOrLose->SetActiveWidget(Tb_YouWin);
 	}
 	else
 	{
-		WS_Team_A_WinOrLose->SetActiveWidgetIndex(1);
-		WS_Team_B_WinOrLose->SetActiveWidgetIndex(0);
+		WS_WinOrLose->SetActiveWidget(Tb_YouLose);
 	}
-	
-	if (WinnerPartyId == MyPartyId)
+
+	switch (WinnerParty)
 	{
-		WS_WinOrLose->SetActiveWidgetIndex(1);
-	}
-	else
-	{
-		WS_WinOrLose->SetActiveWidgetIndex(2);
+		case EWinnerParty::TeamA:
+			{
+				WS_Team_A_WinOrLose->SetActiveWidget(O_Team_A_Win);
+				WS_Team_B_WinOrLose->SetActiveWidget(O_Team_B_Lose);
+				break;
+			}
+		case EWinnerParty::TeamB:
+			{
+				WS_Team_A_WinOrLose->SetActiveWidget(O_Team_A_Lose);
+				WS_Team_B_WinOrLose->SetActiveWidget(O_Team_B_Win);
+				break;
+			}
+		case EWinnerParty::Draw:
+			{
+				WS_WinOrLose->SetActiveWidget(Tb_Draw);
+				WS_Team_A_WinOrLose->SetActiveWidget(O_Team_A_Draw);
+				WS_Team_B_WinOrLose->SetActiveWidget(O_Team_B_Draw);
+				break;
+			}
 	}
 
 	Btn_BackToMainMenu->OnClicked.AddUniqueDynamic(this, &UAccelByteGame::OnBackToMainMenuClicked);

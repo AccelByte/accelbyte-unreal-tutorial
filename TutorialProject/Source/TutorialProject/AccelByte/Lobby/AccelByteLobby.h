@@ -43,6 +43,12 @@ protected:
 protected:
 
 	/**
+	* @brief Button for Refresh The Server Latenies
+	*/
+	UPROPERTY(meta = (BindWidget))
+	UButton* Btn_RefreshLatencies;
+	
+	/**
 	* @brief Button for go to Friend Management Menu.
 	*/
 	UPROPERTY(meta = (BindWidget))
@@ -142,14 +148,14 @@ public:
 	 * @param PartyMenu Party Menu that gonna add to party scroll box widget child.
 	 */
 	UFUNCTION()
-	void AddPartyChild(UAccelByteParty* PartyMenu);
+	void AddPartyChild(UAccelByteParty* PartyMenu) const;
 
 	/**
 	 * @brief Spawn Chat Menu inside party size box widget as child.
 	 * @param ChatMenu Chat Menu reference that is going to be spawned.
 	 */
 	UFUNCTION()
-	void AddChatChild(UAccelByteChat* ChatMenu);
+	void AddChatChild(UAccelByteChat* ChatMenu) const;
 
 	/**
 	* @brief Set Find Match Button to Enabled or not.
@@ -175,28 +181,28 @@ public:
 	 * @brief Reset all party component back to default
 	 */
 	UFUNCTION()
-	void DisableMatchmakingComponents();
+	void DisableMatchmakingComponents() const;
 
 	/**
 	* @brief Set The Game Mode Combo Box to enable or not.
 	* @param bIsComboBoxEnabled Is Game Mode Combo Box Enabled.
 	*/
 	UFUNCTION()
-	void SetGameModeComboBoxEnabled(bool bIsComboBoxEnabled);
+	void SetGameModeComboBoxEnabled(bool bIsComboBoxEnabled) const;
 
 	/**
 	 * @brief Get Current Game Mode Combo Box Selected Option.
 	 * @return The String of Current Selected Option of the Game Mode Combo Box
 	 */
 	UFUNCTION()
-	FString GetGameModeComboBoxSelectedOption();
+	FString GetGameModeComboBoxSelectedOption() const;
 
 	/**
 	* @brief Get Current Maximum Party Member from the Game Mode that has selected.
 	* @return Total Maximum Party Member that allowed to join.
 	*/
 	UFUNCTION()
-	int32 GetMaximumPartyMemberFromGameMode();
+	int32 GetMaximumPartyMemberFromGameMode() const;
 
 	/**
 	 * @brief Get Currently selected latency from combo box index.
@@ -258,5 +264,23 @@ private:
 	 */
 	TPair<FString, float> PreviousLatency;
 
+#pragma endregion
+
+#pragma region RefreshLatencies
+private:
+	/*
+	* @brief Refresh Time Latency
+	*/
+	const float RefreshTime = 120.0f;
+
+	/*
+	* @brief Break To Refresh Latencies
+	*/
+	bool bNeedRefresh = true;
+	
+	/*
+	* @brief Timer Handle Delegate
+	*/
+	FTimerHandle MemberTimerHandle;
 #pragma endregion
 };

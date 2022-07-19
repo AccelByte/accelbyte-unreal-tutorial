@@ -9,6 +9,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Models/AccelByteLobbyModels.h"
 #include "TutorialProject/TutorialMenuHUD.h"
+#include "TutorialProject/AccelByte/Chat/AccelByteChatTab.h"
 #include "AccelByteFriends.generated.h"
 
 /**
@@ -48,6 +49,18 @@ class TUTORIALPROJECT_API UAccelByteFriends : public UUserWidget
 	GENERATED_BODY()
 	
 	virtual void NativeConstruct() override;
+	
+	/**
+	 * @brief Switch the active button to the current button that player clicked before
+	 * @param CurrentButton Current target active button
+	 */
+	void SwitchActiveButton(UButton* CurrentButton);
+
+	/**
+	 * @brief Instantiate current active button
+	 */
+	UPROPERTY()
+	UButton* CurrentActiveButton;
 
 public:
 	
@@ -55,6 +68,11 @@ public:
 	 * @brief Set Friend services notification delegates.
 	 */
 	void SetNotificationDelegate();
+
+	/**
+	 * @brief Refresh friends list when open the friends menu
+	 */
+	void RefreshFriendsList();
 
 private:
 	
@@ -103,22 +121,22 @@ private:
 	 * @brief Callback for Friend List.
 	 */
 	UFUNCTION()
-	void OnClickedFriendList();
+	void LoadFriendList();
 	/**
 	 * @brief Callback for Pending Incoming Friend List.
 	 */
 	UFUNCTION()
-	void OnClickedPendingIncomingList();
+	void LoadPendingIncomingList();
 	/**
 	 * @brief Callback for Pending Outgoing Friend List.
 	 */
 	UFUNCTION()
-	void OnClickedPendingOutgoingList();
+	void LoadPendingOutgoingList();
 	/**
 	 * @brief Callback for Block Friend List.
 	 */
 	UFUNCTION()
-	void OnClickedBlockList();
+	void LoadBlockFriendsList();
 	/**
 	 * @brief Callback for Back button to lobby.
 	 */

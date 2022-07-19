@@ -104,7 +104,7 @@ public:
 	/**
 	 * @brief Function to update the wallet widget.
 	 */
-	void UpdateWallet();
+	void UpdateWallet() const;
 
 	/**
 	 * @brief Default Maximum Column for UGP_StoreGridPanel.

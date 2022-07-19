@@ -175,12 +175,22 @@ public:
 	/**
 	* @brief Set enabled / disabled state of the Create Party & Leave Party button.
 	*/
-	void SetCreatePartyButtonEnabled(const bool& bIsCreateParty) const;
+	void SetCreatePartyButtonEnabled(bool bIsCreateParty) const;
 	
 	/**
 	 * @brief Check total member from game mode that has selected.
 	 */
-	void CheckTotalMemberGameMode();
+	void CheckTotalMemberGameMode() const;
+
+	/**
+	 * @brief Check user current party information when the widget is being constructed.
+	 */
+	void GetCurrentPartyInfo();
+	
+	/**
+	 * @brief Reset current PartyInfo class variable and refresh current party entries.
+	 */
+	void ResetPartyInfo();
 
 private:
 	
@@ -206,4 +216,6 @@ private:
 	*/
 	UPROPERTY()
 	int TotalPartyMember;
+
+	bool bIsInParty;
 };

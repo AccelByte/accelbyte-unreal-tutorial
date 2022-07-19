@@ -14,7 +14,6 @@
 #include "Components/ScaleBox.h"
 #include "Components/HorizontalBox.h"
 #include "TutorialProject/TutorialMenuHUD.h"
-#include "TutorialProject/TutorialProjectUtilities.h"
 #include "TutorialProject/AccelByte/Lobby/AccelByteLobby.h"
 
 #pragma region Initilization
@@ -49,6 +48,7 @@ void UAccelByteFriendEntry::EnableAddFriendButton(bool bEnable) const
 void UAccelByteFriendEntry::OnClickedChat()
 {
 	TutorialMenuHUD->GetChatMenu()->CreateTabButtonWidget(EChatTabType::Private, UserData);
+	TutorialMenuHUD->GetChatMenu()->SwitchChatTab(EChatTabType::Private, UserData.UserId);
 	TutorialMenuHUD->CloseFriendMenu();
 }
 
@@ -59,17 +59,17 @@ void UAccelByteFriendEntry::OnClickedInviteParty()
 
 void UAccelByteFriendEntry::OnClickedUnfriend()
 {
-	FRegistry::Lobby.SetUnfriendResponseDelegate(Lobby::FUnfriendResponse::CreateLambda([this](const FAccelByteModelsUnfriendResponse& Result)
+	FRegistry::Lobby.SetUnfriendResponseDelegate(Api::Lobby::FUnfriendResponse::CreateWeakLambda(this, [this](const FAccelByteModelsUnfriendResponse& Result)
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Successfully unfriend a friend!"));
+		UE_LOG(LogTemp, Log, TEXT("Successfully unfriend a friend!"));
 		
 		TutorialMenuHUD->GetChatMenu()->DeleteTabButtonWidget(EChatTabType::Private, UserData.UserId);
 		
 		this->RemoveFromParent();
 	}),
-	FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+	FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Failed to unfriend a friend! %d: %s"), ErrorCode, *ErrorMessage));
+		UE_LOG(LogTemp, Error, TEXT("Failed to unfriend a friend! %d: %s"), ErrorCode, *ErrorMessage);
 	}));
 	
 	FRegistry::Lobby.Unfriend(UserData.UserId);
@@ -77,25 +77,25 @@ void UAccelByteFriendEntry::OnClickedUnfriend()
 
 void UAccelByteFriendEntry::OnClickedBlock()
 {
-	FRegistry::Lobby.SetBlockPlayerResponseDelegate(Lobby::FBlockPlayerResponse::CreateUObject(this, &UAccelByteFriendEntry::OnBlockPlayerResponse));
+	FRegistry::Lobby.SetBlockPlayerResponseDelegate(Api::Lobby::FBlockPlayerResponse::CreateUObject(this, &UAccelByteFriendEntry::OnBlockPlayerResponse));
 	FRegistry::Lobby.BlockPlayer(UserData.UserId);  
 }
 
 void UAccelByteFriendEntry::OnClickedUnblock()
 {
-	FRegistry::Lobby.SetUnblockPlayerResponseDelegate(Lobby::FUnblockPlayerResponse::CreateUObject(this, &UAccelByteFriendEntry::OnUnblockPlayerResponse));
+	FRegistry::Lobby.SetUnblockPlayerResponseDelegate(Api::Lobby::FUnblockPlayerResponse::CreateUObject(this, &UAccelByteFriendEntry::OnUnblockPlayerResponse));
 	FRegistry::Lobby.UnblockPlayer(UserData.UserId);
 }
 
 void UAccelByteFriendEntry::OnClickedAccept()
 {
-	FRegistry::Lobby.SetAcceptFriendsResponseDelegate(Lobby::FAcceptFriendsResponse::CreateUObject(this, &UAccelByteFriendEntry::OnAcceptFriendResponse));
+	FRegistry::Lobby.SetAcceptFriendsResponseDelegate(Api::Lobby::FAcceptFriendsResponse::CreateUObject(this, &UAccelByteFriendEntry::OnAcceptFriendResponse));
 	FRegistry::Lobby.AcceptFriend(UserData.UserId);
 }
 
 void UAccelByteFriendEntry::OnClickedDecline()
 {
-	FRegistry::Lobby.SetRejectFriendsResponseDelegate(Lobby::FRejectFriendsResponse::CreateUObject(this, &UAccelByteFriendEntry::OnRejectFriendResponse));
+	FRegistry::Lobby.SetRejectFriendsResponseDelegate(Api::Lobby::FRejectFriendsResponse::CreateUObject(this, &UAccelByteFriendEntry::OnRejectFriendResponse));
 	FRegistry::Lobby.RejectFriend(UserData.UserId);
 }
 
@@ -107,7 +107,7 @@ void UAccelByteFriendEntry::OnClickedCancelRequest()
 
 void UAccelByteFriendEntry::OnClickedAddFriend()
 {
-	FRegistry::Lobby.SetRequestFriendsResponseDelegate(Lobby::FRequestFriendsResponse::CreateUObject(this, &UAccelByteFriendEntry::OnRequestFriendResponse));
+	FRegistry::Lobby.SetRequestFriendsResponseDelegate(Api::Lobby::FRequestFriendsResponse::CreateUObject(this, &UAccelByteFriendEntry::OnRequestFriendResponse));
 	FRegistry::Lobby.RequestFriend(UserData.UserId);
 	Btn_AddFriend->SetIsEnabled(false);
 }
@@ -118,7 +118,7 @@ void UAccelByteFriendEntry::OnClickedAddFriend()
 
 void UAccelByteFriendEntry::OnSuccessGetUserId(const FSimpleUserData& Data)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString::Printf(TEXT("Success Get User By User ID!")));
+	UE_LOG(LogTemp, Log, TEXT("Success Get User By User ID!"));
 
 	UserData = Data;
 	Tb_FriendName->SetText(FText::FromString(UserData.DisplayName));
@@ -126,20 +126,20 @@ void UAccelByteFriendEntry::OnSuccessGetUserId(const FSimpleUserData& Data)
 
 void UAccelByteFriendEntry::OnFailedGetUserId(int32 ErrorCode, const FString& ErrorMessage)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT(" Get User Id Failed : Code: %d, Reason: %s"), ErrorCode, *ErrorMessage));
+	UE_LOG(LogTemp, Error, TEXT(" Get User Id Failed : Code: %d, Reason: %s"), ErrorCode, *ErrorMessage);
 }
 
 void UAccelByteFriendEntry::OnUnfriendResponse(const FAccelByteModelsUnfriendResponse& Result)
 {
 	if (Result.Code == "0")
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Successfully unfriend a friend!"));
+		UE_LOG(LogTemp, Log, TEXT("Successfully unfriend a friend!"));
 
 		this->RemoveFromParent();
 	}  
 	else  
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Failed to unfriend a friend! Code: %s"), *Result.Code));
+		UE_LOG(LogTemp, Error, TEXT("Failed to unfriend a friend! Code: %s"), *Result.Code);
 	}  
 }
 
@@ -147,7 +147,7 @@ void UAccelByteFriendEntry::OnBlockPlayerResponse(const FAccelByteModelsBlockPla
 {
 	if (Result.Code == "0")
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Successfully block a friend!"));
+		UE_LOG(LogTemp, Log, TEXT("Successfully block a friend!"));
 		
 		TutorialMenuHUD->GetChatMenu()->DeleteTabButtonWidget(EChatTabType::Private, UserData.UserId);
 		
@@ -155,7 +155,7 @@ void UAccelByteFriendEntry::OnBlockPlayerResponse(const FAccelByteModelsBlockPla
 	}  
 	else  
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Failed to block a friend! Code: %s"), *Result.Code));
+		UE_LOG(LogTemp, Error, TEXT("Failed to block a friend! Code: %s"), *Result.Code);
 	}  
 }
 
@@ -163,13 +163,13 @@ void UAccelByteFriendEntry::OnUnblockPlayerResponse(const FAccelByteModelsUnbloc
 {
 	if (Result.Code == "0")
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Successfully Unblock User!"));
+		UE_LOG(LogTemp, Log, TEXT("Successfully Unblock User!"));
 		
 		this->RemoveFromParent();
 	}  
 	else  
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("Cannot retrieve the list of outgoing/pending friend request!"));
+		UE_LOG(LogTemp, Error, TEXT("Cannot retrieve the list of outgoing/pending friend request!"));
 	}
 }
 
@@ -177,13 +177,13 @@ void UAccelByteFriendEntry::OnAcceptFriendResponse(const FAccelByteModelsAcceptF
 {
 	if (Result.Code == "0")
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Successfully accept a friend request!"));
+		UE_LOG(LogTemp, Log, TEXT("Successfully accept a friend request!"));
 
 		this->RemoveFromParent();
 	}  
 	else
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Failed to accept a friend request! Code: %s"), *Result.Code));
+		UE_LOG(LogTemp, Error, TEXT("Failed to accept a friend request! Code: %s"), *Result.Code);
 	}
 }
 
@@ -191,13 +191,13 @@ void UAccelByteFriendEntry::OnRejectFriendResponse(const FAccelByteModelsRejectF
 {
 	if (Result.Code == "0")
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Successfully reject a friend request!"));
+		UE_LOG(LogTemp, Log, TEXT("Successfully reject a friend request!"));
 
 		this->RemoveFromParent();
 	}  
 	else
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Failed to reject a friend request! Code: %s"), *Result.Code));
+		UE_LOG(LogTemp, Error, TEXT("Failed to reject a friend request! Code: %s"), *Result.Code);
 	}
 }
 
@@ -205,11 +205,11 @@ void UAccelByteFriendEntry::OnRequestFriendResponse(const FAccelByteModelsReques
 {
 	if (Result.Code == "0")
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Successfully send a friend request!"));
+		UE_LOG(LogTemp, Log, TEXT("Successfully send a friend request!"));
 	}  
 	else  
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Failed to send a friend request! Code: %s"), *Result.Code));
+		UE_LOG(LogTemp, Error, TEXT("Failed to send a friend request! Code: %s"), *Result.Code);
 	}
 }
 

@@ -81,7 +81,7 @@ void UAccelByteChatTab::SetButtonColorState(const EChatTabState& TabState) const
 		break;
 		
 	case EChatTabState::Selected:
-		Btn_ChatTab->SetBackgroundColor(FLinearColor::Blue);
+		Btn_ChatTab->SetBackgroundColor(TutorialProjectUtilities::SelectedTabGreyColor);
 		break;
 		
 	default:

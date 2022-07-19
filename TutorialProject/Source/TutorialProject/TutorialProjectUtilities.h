@@ -11,29 +11,54 @@ DECLARE_DELEGATE_OneParam(FOnImageReceived, FCacheBrush);
 class TutorialProjectUtilities
 {
 
+protected:
+
+	static FString LocalDeviceId();
+	static FString GetDeviceId();
+
 public:
 	
 	static FString LaunchArgsLocalDS;
 	static FString LaunchArgsSteam;
 	static FString LocalServerName;
+	static FString LocalServerIpAddress;
+	static int32 LocalServerPort;
+	static int32 ServerPort;
 	
 	static FString GameSettingCloudSaveKey;
 	static FString CloudSaveJsonKeyA;
 	static FString CloudSaveJsonKeyB;
 	static EWindowMode::Type DefaultDisplaySettings;
 	static FIntPoint DefaultResolutionSettings;
-	static int32 DefaultDisplayModeIndex;
 	static int32 DefaultCloudSaveStateIndex;
+	static FString PublicCloudSaveEquipmentKey;
+	static FString PublicCloudSaveAbilityJsonKey;
+	static FString PublicCloudSaveBadgeJsonKey;
+	static FString PublicCloudSaveNoneValue;
+	static FString PublicCloudSaveAbilityBronze;
+	static FString PublicCloudSaveAbilitySilver;
 
 	static FString ResourcePathForSaveGalleryImage;
 	static FString GalleryLabel;
 	static FString GalleryTag;
+
+	static FString RewardNotificationTopic;
+	static FString RewardTopic;
+	static FString AchievementEventTopic;
+	static FString RewardCondition;
+	static FString AchievementCodeSplitString;
+	static FString EntitlementSummariesObjectField;
+	static FString ItemIdStringField;
+	static FString CreditSummariesObjectField;
+	static FString AmountStringField;
 	
 	static FString GameModeAttributeName;
 	static FString VirtualCurrencyCode;
 	static FString DefaultImage;
 	static TMap<FString, EImageFormat> ImageFormatMap;
 	static int32 DefaultPartyMemberCount;
+	static int32 DefaultReadyConsentTimeOut;
+	static FLinearColor SelectedTabGreyColor;
 
 	/**
 	 * @brief Showing the log from both UE4_LOG and AddOnScreenDebugMessage Log.

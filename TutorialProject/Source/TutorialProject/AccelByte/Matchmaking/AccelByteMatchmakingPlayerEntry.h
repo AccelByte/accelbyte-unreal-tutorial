@@ -9,6 +9,7 @@
 #include "Blueprint/IUserObjectListEntry.h"
 #include "AccelByteMatchmakingPlayerEntry.generated.h"
 
+class UImage;
 class UTextBlock;
 
 /**
@@ -24,7 +25,7 @@ class TUTORIALPROJECT_API UAccelByteMatchmakingPlayerEntry : public UUserWidget,
 	 * @brief This will handle every time the object is listed to the list view widget component
 	 * @param InObject The object that are currently created to the list, in this case will bi AccelByteMatchmakingPlayerEntry object
 	 */
-	virtual void SetListItemObjectInternal(UObject* InObject) override;
+	virtual void NativeOnListItemObjectSet(UObject* InObject) override;
 
 	/**
 	* @brief Text block to display player name.
@@ -32,10 +33,27 @@ class TUTORIALPROJECT_API UAccelByteMatchmakingPlayerEntry : public UUserWidget,
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* Tb_PlayerUsername;
 
+	/**
+	 * @brief Image to get the ability property widget
+	 */
+	UPROPERTY(meta = (BindWidget))
+	UImage* I_Ability;
+
+	/**
+	* @brief Image to get the badge property widget
+	*/
+	UPROPERTY(meta = (BindWidget))
+	UImage* I_Badge;
+
 public:
 	
 	/**
 	 * @brief This will handle the current player entry Display Name
 	 */
 	FString DisplayName;
+
+	/**
+	 * @brief User Id to get the player cloud save equipment
+	 */
+	FString UserId;
 };

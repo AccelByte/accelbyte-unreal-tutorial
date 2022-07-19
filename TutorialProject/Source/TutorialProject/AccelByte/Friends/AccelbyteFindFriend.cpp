@@ -10,7 +10,6 @@
 #include "Components/EditableTextBox.h"
 #include "Components/ScrollBox.h"
 #include "TutorialProject/TutorialMenuHUD.h"
-#include "TutorialProject/TutorialProjectUtilities.h"
 
 void UAccelByteFindFriend::NativeConstruct()
 {
@@ -51,7 +50,7 @@ void UAccelByteFindFriend::OnLoadFriendListResponse(const FAccelByteModelsLoadFr
 	
 	if (Result.Code == "0")
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("On Load Friend List Success!"));
+		UE_LOG(LogTemp, Log, TEXT("On Load Friend List Success!"));
 		
 		FriendSentRequestArray = Result.friendsId;
 
@@ -59,7 +58,7 @@ void UAccelByteFindFriend::OnLoadFriendListResponse(const FAccelByteModelsLoadFr
 	}
 	else
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("Unable to retrieve friends list!"));
+		UE_LOG(LogTemp, Error, TEXT("Unable to retrieve friends list!"));
 	}
 }
 
@@ -67,19 +66,19 @@ void UAccelByteFindFriend::OnListOutgoingFriendResponse(const FAccelByteModelsLi
 {
 	if (Result.Code == "0")  
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("On List Outgoing Friends Success"));
+		UE_LOG(LogTemp, Log, TEXT("On List Outgoing Friends Success"));
 		
 		FriendSentRequestArray.Append(Result.friendsId);
 		
-		FindFriends(Etb_FindFriend->GetText().ToString());
+		FindUsers(Etb_FindFriend->GetText().ToString());
 	}
 	else
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("Unable to retrieve the list of outgoing/pending friend request!"));
+		UE_LOG(LogTemp, Error, TEXT("Unable to retrieve the list of outgoing/pending friend request!"));
 	}
 }
 
-void UAccelByteFindFriend::FindFriends(const FString& FriendName)
+void UAccelByteFindFriend::FindUsers(const FString& FriendName)
 {
 	FRegistry::User.SearchUsers(
 		FriendName,
@@ -90,7 +89,7 @@ void UAccelByteFindFriend::FindFriends(const FString& FriendName)
 
 void UAccelByteFindFriend::OnSuccessFindFriends(const FPagedPublicUsersInfo& Result)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Success Find Friends"));
+	UE_LOG(LogTemp, Log, TEXT("Success Find Friends"));
 
 	Sb_FriendList->ClearChildren();
 	
@@ -119,5 +118,5 @@ void UAccelByteFindFriend::OnSuccessFindFriends(const FPagedPublicUsersInfo& Res
 
 void UAccelByteFindFriend::OnFailedFindFriends(int32 ErrorCode, const FString& ErrorMessage)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Failed Find Friends : %d , %s"), ErrorCode, *ErrorMessage));
+	UE_LOG(LogTemp, Error, TEXT("Failed Find Friends : %d , %s"), ErrorCode, *ErrorMessage);
 }

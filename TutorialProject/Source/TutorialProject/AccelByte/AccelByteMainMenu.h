@@ -7,7 +7,6 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/SizeBox.h"
-#include "Models/AccelByteUserProfileModels.h"
 #include "AccelByteMainMenu.generated.h"
 
 class UButton;
@@ -65,16 +64,22 @@ protected:
 	UButton* Btn_Settings;
 
 	/**
+	* @brief Button for Accessing Leaderboard Menu.
+	*/
+	UPROPERTY(meta = (BindWidget))
+	UButton* Btn_Leaderboard;
+
+	/**
+	* @brief Button for Accessing Achievement Menu.
+	*/
+	UPROPERTY(meta = (BindWidget))
+	UButton* Btn_Achievement;
+
+	/**
 	* @brief Text Box for displaying Player Name.
 	*/
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* Tb_PlayerName;
-
-	/**
-	* @brief Scrollbox to handle the max width and height of the Single Player button.
-	*/
-	UPROPERTY(meta = (BindWidget))
-	USizeBox* Sb_SinglePlayer;
 
 	/**
 	* @brief Scrollbox to handle the max width and height of the Lobby button.
@@ -93,17 +98,6 @@ protected:
 	*/
 	UFUNCTION()
 	void LogOut();
-
-	UFUNCTION()
-	/**
-	* @brief Callback for successfully get user profile.
-	*/
-	void OnSuccessUserProfile(const FAccelByteModelsUserProfileInfo& Data);
-	/**
-	* @brief Text Box for failed accessing user profile.
-	*/
-	UFUNCTION()
-	void OnFailedUserProfile(int32 ErrorCode, const FString& ErrorMessage);
 
 	/**
 	* @brief A Tutorial Menu HUD to handle all instantiate and casting to the HUD framework

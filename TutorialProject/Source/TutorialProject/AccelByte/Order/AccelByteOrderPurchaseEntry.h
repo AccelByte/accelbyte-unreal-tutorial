@@ -9,7 +9,8 @@
 #include "Models/AccelByteEcommerceModels.h"
 #include "AccelByteOrderPurchaseEntry.generated.h"
 
-class UAccelByteStatistic;
+class UAccelByteStatisticObject;
+class UAccelByteAchievement;
 class UTextBlock;
 class UButton;
 class UAccelByteOrder;
@@ -63,7 +64,13 @@ private:
 	 * @brief Pointer to AccelByteStatistic
 	 */
 	UPROPERTY()
-	UAccelByteStatistic* AccelByteStatistic;
+	UAccelByteStatisticObject* AccelByteStatisticObject;
+
+	/**
+	 * @brief Pointer to AccelByteAchievement
+	 */
+	UPROPERTY()
+	UAccelByteAchievement* AccelByteAchievement;
 
 public:
 	/**

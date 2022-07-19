@@ -10,6 +10,7 @@
 #include "TutorialProject/TutPlayerControllerCountGame.h"
 #include "AccelByteGame.generated.h"
 
+class UOverlay;
 class UButton;
 class UTextBlock;
 class UScrollBox;
@@ -65,13 +66,7 @@ protected:
 	* @brief Text Block to display time left until the game ends.
 	*/
 	UPROPERTY(meta = (BindWidget))
-	UTextBlock* T_Countdown;
-
-	/**
-	* @brief Text Block to display time left until the game ends.
-	*/
-	UPROPERTY(meta = (BindWidget))
-	UTextBlock* T_Timer;
+	UTextBlock* Tb_Countdown;
 
 	/**
 	* @brief Scroll Box to display and insert Scoreboard Entries of Team A.
@@ -104,16 +99,76 @@ protected:
 	UWidgetSwitcher* WS_Team_A_WinOrLose;
 
 	/**
+	 * @brief Switch text to a team A as a winner
+	 */
+	UPROPERTY(meta = (BindWidget))
+	UOverlay* O_Team_A_Win;
+
+	/**
+	* @brief Switch text to a team A as a loser
+	*/
+	UPROPERTY(meta = (BindWidget))
+	UOverlay* O_Team_A_Lose;
+
+	/**
+	* @brief Switch text to a team A as a draw
+	*/
+	UPROPERTY(meta = (BindWidget))
+	UOverlay* O_Team_A_Draw;
+
+	/**
 	* @brief Widget switcher to switch between win or lose of Team B.
 	*/
 	UPROPERTY(meta = (BindWidget))
 	UWidgetSwitcher* WS_Team_B_WinOrLose;
 
 	/**
+	* @brief Switch text to a team B as a winner
+	*/
+	UPROPERTY(meta = (BindWidget))
+	UOverlay* O_Team_B_Win;
+
+	/**
+	* @brief Switch text to a team B as a loser
+	*/
+	UPROPERTY(meta = (BindWidget))
+	UOverlay* O_Team_B_Lose;
+
+	/**
+	* @brief Switch text to a team B as a draw
+	*/
+	UPROPERTY(meta = (BindWidget))
+	UOverlay* O_Team_B_Draw;
+
+	/**
 	* @brief Widget switcher to switch if the current player win or lose.
 	*/
 	UPROPERTY(meta = (BindWidget))
 	UWidgetSwitcher* WS_WinOrLose;
+
+	/**
+	 * @brief Switch the text to timer countdown text
+	 */
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* Tb_Timer;
+
+	/**
+	* @brief Switch the text to a winner text
+	*/
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* Tb_YouWin;
+
+	/**
+	* @brief Switch the text to a lose text
+	*/
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* Tb_YouLose;
+
+	/**
+	* @brief Switch the text to a draw text
+	*/
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* Tb_Draw;
 
 	/**
 	* @brief Subclass for Scoreboard Entry Widget Class.
@@ -123,6 +178,7 @@ protected:
 	/**
 	* @brief TMap that binds a Scoreboard Entry Widget to a UserId.
 	*/
+	UPROPERTY()
 	TMap<FString, UAccelByteScoreboardEntry*> ScoreEntryWidgetMap;
 
 	/**
@@ -138,7 +194,7 @@ protected:
 	/**
 	* @brief Local variable to handle current party id.
 	*/
-	uint8 MyPartyId;
+	EPartyId MyPartyId;
 
 	/**
 	* @brief Boolean function to check if a UserId exists in the ScoreEntryWidgetMap and validates its value.
@@ -163,7 +219,7 @@ public:
 	* @brief Functionality to init and show the Countdown Panel.
 	*/
 	UFUNCTION()
-	void InitCountdown(uint8 PartyId);
+	void InitCountdown(const EPartyId& PartyId);
 
 	/**
 	* @brief Functionality to init and show the Scoreboard Panel
@@ -175,13 +231,13 @@ public:
 	* @brief Functionality to update the T_Countdown text.
 	*/
 	UFUNCTION()
-	void UpdateCountdownTimer(const int& CountdownTimerLeft);
+	void UpdateCountdownTimer(const int& CountdownTimerLeft) const;
 	
 	/**
 	* @brief Functionality to update the T_Timer text.
 	*/
 	UFUNCTION()
-	void UpdateTimer(const int& TimeLeft);
+	void UpdateTimer(const int& TimeLeft) const;
 
 	/**
 	* @brief Functionality to update the user and party score in a specific Scoreboard Entry Widget.
@@ -193,5 +249,5 @@ public:
 	* @brief Functionality to stop the game and display the winning party.
 	*/
 	UFUNCTION()
-	void GameOver(const uint8 WinnerPartyId);
+	void GameOver(const EWinnerParty& WinnerParty);
 };

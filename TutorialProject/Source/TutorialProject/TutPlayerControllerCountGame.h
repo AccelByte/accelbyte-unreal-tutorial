@@ -9,9 +9,31 @@
 #include "GameFramework/PlayerController.h"
 #include "TutPlayerControllerCountGame.generated.h"
 
+class UAccelByteLobby;
 /**
- * @brief Player information
+ * @brief Party Index or Identity
  */
+UENUM()
+enum class EPartyId : uint8
+{
+	PartyA,
+	PartyB
+};
+
+/**
+ * @brief Winner Party Index either Team A, B, or Draw as a Winner Party 
+ */
+UENUM()
+enum class EWinnerParty : uint8
+{
+	TeamA,
+	TeamB,
+	Draw
+};
+
+/**
+* @brief Player information
+*/
 USTRUCT()
 struct FPlayerData
 {
@@ -20,13 +42,15 @@ struct FPlayerData
 	UPROPERTY()
 	FString UserId;
 	UPROPERTY()
-	uint8 PartyId;
+	EPartyId PartyId;
 	UPROPERTY()
 	FString DisplayName;
 	UPROPERTY()
 	int Score;
 	UPROPERTY()
 	int32 Click;
+	UPROPERTY()
+	bool bIsPlayWithFriend;
 };
 
 class UAccelByteGame;
@@ -46,18 +70,28 @@ protected:
 	/**
 	* @brief Begin play when the first time player controller is initialize
 	*/
-	void BeginPlay() override;
+	virtual void BeginPlay() override;
 
 	/**
 	* @brief Pointer for this player's Game Widget.
 	*/
+	UPROPERTY()
 	UAccelByteGame* GameWidget;
+
+	UPROPERTY()
+	UAccelByteLobby* AccelByteLobby;
 
 	/**
 	* @brief Login Menu widget class
 	*/
 	UPROPERTY(EditDefaultsOnly)
 	TSubclassOf<UAccelByteGame> AccelByteGameClass;
+	
+	/**
+	* @brief Login Menu widget class
+	*/
+	UPROPERTY(EditDefaultsOnly)
+	TSubclassOf<UAccelByteLobby> AccelByteLobbyClass;
 
 public:
 	
@@ -71,7 +105,7 @@ public:
 	* @brief Notification from server to Initialize the Countdown Timer in this player's Game Widget.
 	*/
 	UFUNCTION(Client, Reliable)
-	void Client_InitCountdownTimer(uint8 PartyId);
+	void Client_InitCountdownTimer(const EPartyId& PartyId);
 
 	/**
 	* @brief Notification from server to update countdown time is left.
@@ -101,7 +135,7 @@ public:
 	* @brief Notification from server announcing the Game is Over and its winner.
 	*/
 	UFUNCTION(Client, Reliable)
-	void Client_ReceiveGameOverEvent(const uint8 WinnerPartyId);
+	void Client_ReceiveGameOverEvent(const EWinnerParty& WinnerParty);
 
 	/**
 	* @brief Login Menu widget class

@@ -91,9 +91,9 @@ protected:
 	void OnListOutgoingFriendResponse(const FAccelByteModelsListOutgoingFriendsResponse& Result);
 	
 	/**
-	* @brief Find Friends functionality inside the callback.
+	* @brief Find Users functionality inside the callback.
 	*/
-	void FindFriends(const FString& FriendName);
+	void FindUsers(const FString& FriendName);
 	
 	/**
 	* @brief Callback for Success Find Friends.

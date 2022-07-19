@@ -4,9 +4,12 @@
 
 #include "AccelByteEntitlementEntry.h"
 #include "AccelByteEntitlement.h"
+#include "Api/AccelByteCloudSaveApi.h"
 #include "Api/AccelByteEntitlementApi.h"
 #include "Components/Button.h"
+#include "Components/CircularThrobber.h"
 #include "Components/Image.h"
+#include "Components/Overlay.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/WidgetSwitcher.h"
@@ -14,68 +17,113 @@
 #include "TutorialProject/TutorialMenuHUD.h"
 #include "TutorialProject/TutorialProjectUtilities.h"
 
-void UAccelByteEntitlementEntry::InitData(const FAccelByteModelsPopulatedItemInfo& Data, int32 DataCount, const FString& EntitlementId)
+void UAccelByteEntitlementEntry::InitData(const FAccelByteModelsPopulatedItemInfo& ItemInfo, const FAccelByteModelsEntitlementInfo& EntitlementInfo, const FPlayerEquipment& CurrentPlayerEquipment)
 {
-	WS_EntitlementEntry->SetActiveWidgetIndex(0);
-
-	EntitlementIdentity = EntitlementId;
+	ItemData = ItemInfo;
+	EntitlementData = EntitlementInfo;
+	PlayerEquipment = CurrentPlayerEquipment;
 	
-	Tb_ItemName->SetText(FText::FromString(Data.Name));
-	Tb_ItemDescription->SetText(FText::FromString(Data.Description));
+	WS_EntitlementEntry->SetActiveWidget(CT_Loading);
 	
-	if (Data.EntitlementType == EAccelByteEntitlementType::CONSUMABLE)
+	Tb_ItemName->SetText(FText::FromString(ItemData.Name));
+	Tb_ItemDescription->SetText(FText::FromString(ItemData.Description));
+	
+	if (ItemData.EntitlementType == EAccelByteEntitlementType::CONSUMABLE)
 	{
-		Sb_Consume->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		Btn_Consume->OnClicked.AddUniqueDynamic(this, &UAccelByteEntitlementEntry::OnConsumeButtonClicked);
-		Sb_UseCount->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		Tb_UseCount->SetText(FText::FromString(FString::FromInt(DataCount)));
-	}
-	
-	if (Data.Images.Num() > 0)
-	{
-		const FString ImageId = FBase64::Encode(Data.Images[0].SmallImageUrl);
-		const FCacheBrush Brush = TutorialProjectUtilities::GetImageFromCache(ImageId);
-		
-		if (Brush.IsValid())
+		if (PlayerEquipment.UsedItem == TutorialProjectUtilities::PublicCloudSaveNoneValue)
 		{
-			I_ItemImage->SetBrush(*Brush.Get());
-			WS_EntitlementEntry->SetActiveWidgetIndex(1);
+			WS_ConsumeOrEquip->SetActiveWidget(WS_Consume);
+			WS_Consume->SetActiveWidget(Sb_Consume);
+			Btn_Consume->OnClicked.AddUniqueDynamic(this, &UAccelByteEntitlementEntry::OnConsumeButtonClicked);
+		}
+		else if (PlayerEquipment.UsedItem == ItemData.Tags[0])
+		{
+			WS_ConsumeOrEquip->SetActiveWidget(WS_Consume);
+			WS_Consume->SetActiveWidget(Sb_InUsed);
 		}
 		else
 		{
-			TutorialProjectUtilities::GetImageFromURL(Data.Images[0].SmallImageUrl, ImageId, FOnImageReceived::CreateLambda([this](const FCacheBrush Result)
-			{
-				I_ItemImage->SetBrush(*Result.Get());
-				WS_EntitlementEntry->SetActiveWidgetIndex(1);
-			}));
+			WS_ConsumeOrEquip->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		Sb_UseCount->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		Tb_UseCount->SetText(FText::FromString(FString::FromInt(EntitlementInfo.UseCount)));
+	}
+	else if (ItemData.EntitlementType == EAccelByteEntitlementType::DURABLE)
+	{
+		WS_ConsumeOrEquip->SetActiveWidget(WS_Equip);
+		bool bIsEquipButton = false;
+		// Tags 0 means the item id to compare the equipped item from cloud save
+		if (PlayerEquipment.EquippedItem == TutorialProjectUtilities::PublicCloudSaveNoneValue || PlayerEquipment.EquippedItem != ItemData.Tags[0])
+		{
+			bIsEquipButton = true;
+		}
+
+		if (bIsEquipButton)
+		{
+			WS_Equip->SetActiveWidget(Sb_Equip);
+			Btn_Equip->OnClicked.AddUniqueDynamic(this, &UAccelByteEntitlementEntry::OnEquipButtonClicked);
+		}
+		else
+		{
+			WS_Equip->SetActiveWidget(Sb_Unequip);
+			Btn_Unequip->OnClicked.AddUniqueDynamic(this, &UAccelByteEntitlementEntry::OnUnequipButtonClicked);
 		}
 	}
-	else
+
+	if (ItemData.Tags.Num() > 0)
 	{
-		const FCacheBrush DefaultBrush = TutorialProjectUtilities::GetImageFromCache(TutorialProjectUtilities::DefaultImage);
-		if (DefaultBrush.IsValid())
+		// Tags 0 means the item id to get the image from cache folder
+		const FString ItemTagId = ItemData.Tags[0] + ".png";
+		const FCacheBrush Brush = TutorialProjectUtilities::GetImageFromCache(ItemTagId);
+		if (Brush.IsValid())
 		{
-			I_ItemImage->SetBrush(*DefaultBrush.Get());
-			WS_EntitlementEntry->SetActiveWidgetIndex(1);
+			I_ItemImage->SetBrush(*Brush.Get());
+			WS_EntitlementEntry->SetActiveWidget(O_Entitlement);
 		}
 	}
 }
 
 void UAccelByteEntitlementEntry::OnConsumeButtonClicked()
 {
-	FRegistry::Entitlement.ConsumeUserEntitlement(EntitlementIdentity, 1, THandler<FAccelByteModelsEntitlementInfo>::CreateLambda([this](const FAccelByteModelsEntitlementInfo& Result)
+	Btn_Consume->SetIsEnabled(false);
+	const int32 UseCount = 1;
+	FRegistry::Entitlement.ConsumeUserEntitlement(EntitlementData.Id, UseCount, THandler<FAccelByteModelsEntitlementInfo>::CreateWeakLambda(this, [this](const FAccelByteModelsEntitlementInfo& Result)
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Success Consume User Entitlement"));
-		Tb_UseCount->SetText(FText::FromString(FString::FromInt(Result.UseCount)));
+		PlayerEquipment.UsedItem = ItemData.Tags[0];
+		const TSharedPtr<FJsonObject> JsonObject = FJsonObjectConverter::UStructToJsonObject(PlayerEquipment);
+		UpdatePlayerEquipment(*JsonObject, Btn_Consume);
+	}), FErrorHandler::CreateWeakLambda(this, [this](int32 ErrorCode, const FString& ErrorMessage)
+	{
+		UE_LOG(LogTemp, Error, TEXT("ConsumeUserEntitlement Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
+		Btn_Consume->SetIsEnabled(true);
+	}));
+}
 
-		if (Result.UseCount == 0)
-		{
-			ATutorialMenuHUD* TutorialMenuHUD = Cast<ATutorialMenuHUD>(GetOwningPlayer()->GetHUD());
-			TutorialMenuHUD->GetInventoryMenu()->RefreshInventoryMenu();
-		}
-	}),
-	FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+void UAccelByteEntitlementEntry::OnEquipButtonClicked()
+{
+	PlayerEquipment.EquippedItem = ItemData.Tags[0];
+	const TSharedPtr<FJsonObject> JsonObject = FJsonObjectConverter::UStructToJsonObject(PlayerEquipment);
+	UpdatePlayerEquipment(*JsonObject, Btn_Equip);
+}
+
+void UAccelByteEntitlementEntry::OnUnequipButtonClicked()
+{
+	PlayerEquipment.EquippedItem = TutorialProjectUtilities::PublicCloudSaveNoneValue;
+	const TSharedPtr<FJsonObject> JsonObject = FJsonObjectConverter::UStructToJsonObject(PlayerEquipment);
+	UpdatePlayerEquipment(*JsonObject, Btn_Unequip);
+}
+
+void UAccelByteEntitlementEntry::UpdatePlayerEquipment(const FJsonObject& JsonObject, UButton* CurrentActiveButton)
+{
+	CurrentActiveButton->SetIsEnabled(false);
+	FRegistry::CloudSave.ReplaceUserRecord(TutorialProjectUtilities::PublicCloudSaveEquipmentKey, JsonObject, true, FVoidHandler::CreateWeakLambda(this, [this]()
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Consume Error Entitlement Error, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage));
+		ATutorialMenuHUD* TutorialMenuHUD = Cast<ATutorialMenuHUD>(GetOwningPlayer()->GetHUD());
+		check(TutorialMenuHUD);
+		TutorialMenuHUD->GetInventoryMenu()->RefreshInventoryMenu();
+	}), FErrorHandler::CreateWeakLambda(this, [CurrentActiveButton](int32 ErrorCode, const FString& ErrorMessage)
+	{
+		CurrentActiveButton->SetIsEnabled(true);
+		UE_LOG(LogTemp, Error, TEXT("ReplaceUserRecord Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 	}));
 }

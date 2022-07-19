@@ -41,13 +41,13 @@ public:
 	* @brief Enabling button Promote Leader and Kick Party member.
 	* @param bEnable Enable all button components.
 	*/
-	void EnableAllComponents(const bool bEnable) const;
+	void EnableAllComponents(bool bEnable) const;
 	
 	/**
 	* @brief Set Image Icon to Party Member.
 	* @param IsLeader Checks if the player is the leader of the party.
 	*/
-	void SetImageIconLeader(const bool IsLeader) const;
+	void SetImageIconLeader(bool bIsLeader) const;
 
 	/**
 	* @brief Get User Data stored in this entry.

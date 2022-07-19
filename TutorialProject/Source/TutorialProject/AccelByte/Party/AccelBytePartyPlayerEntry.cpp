@@ -10,7 +10,6 @@
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
-#include "TutorialProject/TutorialProjectUtilities.h"
 
 void UAccelBytePartyPlayerEntry::NativeConstruct()
 {
@@ -30,7 +29,7 @@ void UAccelBytePartyPlayerEntry::InitData(const FString& PlayerId)
 		FErrorHandler::CreateUObject(this, &UAccelBytePartyPlayerEntry::OnFailedGetUserId));
 }
 
-void UAccelBytePartyPlayerEntry::EnableAllComponents(const bool bEnable) const
+void UAccelBytePartyPlayerEntry::EnableAllComponents(bool bEnable) const
 {
 	if (bEnable)
 	{
@@ -44,9 +43,9 @@ void UAccelBytePartyPlayerEntry::EnableAllComponents(const bool bEnable) const
 	}
 }
 
-void UAccelBytePartyPlayerEntry::SetImageIconLeader(const bool IsLeader) const
+void UAccelBytePartyPlayerEntry::SetImageIconLeader(bool bIsLeader) const
 {
-	if (IsLeader)
+	if (bIsLeader)
 	{
 		Img_LeaderIcon->SetVisibility(ESlateVisibility::Visible);
 	}
@@ -77,11 +76,11 @@ void UAccelBytePartyPlayerEntry::OnPartyPromoteLeaderResponse(const FAccelByteMo
 {
 	if (Result.Code == "0")
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Promote Party Leader Success!"));
+		UE_LOG(LogTemp, Log, TEXT("Promote Party Leader Success!"));
 	}
 	else
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("Promote Party Leader Failed!"));
+		UE_LOG(LogTemp, Error, TEXT("Promote Party Leader Failed!"));
 		GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Cyan, "Unable to Promote Party Leader!");
 	}
 }
@@ -90,11 +89,11 @@ void UAccelBytePartyPlayerEntry::OnInvitePartyKickMemberResponse(const FAccelByt
 {
 	if (Result.Code == "0")
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Kick Party Member Success!"));
+		UE_LOG(LogTemp, Log, TEXT("Kick Party Member Success!"));
 	}
 	else
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("Kick Party Member Failed!"));
+		UE_LOG(LogTemp, Error, TEXT("Kick Party Member Failed!"));
 	}
 }
 
@@ -106,5 +105,5 @@ void UAccelBytePartyPlayerEntry::OnSuccessGetUserId(const FSimpleUserData& Data)
 
 void UAccelBytePartyPlayerEntry::OnFailedGetUserId(int32 ErrorCode, const FString& ErrorMessage)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Get User Id Failed : %d , %s"), ErrorCode, *ErrorMessage));
+	UE_LOG(LogTemp, Error, TEXT("Get User Id Failed : %d , %s"), ErrorCode, *ErrorMessage);
 }

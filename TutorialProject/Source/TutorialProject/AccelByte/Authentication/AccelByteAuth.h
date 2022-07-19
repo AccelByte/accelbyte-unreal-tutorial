@@ -12,7 +12,7 @@ class UVerticalBox;
 class UEditableTextBox;
 class UButton;
 class ATutorialMenuHUD;
-class UCanvasPanel;
+class UTextBlock;
 
 /**
 * Component for logging in a user with the AccelByte back end as well as methods for grabbing information relating to that user.
@@ -31,12 +31,6 @@ protected:
 	virtual void NativeConstruct() override;
 
 	/**
-	* @brief Login Menu Canvas Panel to show and not show the login menu if the current state is still logging in with 3rd party platform
-	*/
-	UPROPERTY(meta = (BindWidget))
-	UCanvasPanel* CP_LoginMenu;
-	
-	/**
 	* @brief Editable Text Box for Username inside MainMenu Widget.
 	*/
 	UPROPERTY(meta = (BindWidget))
@@ -53,11 +47,22 @@ protected:
 	*/
 	UPROPERTY(meta = (BindWidget))
 	UButton* Btn_Login;
+
+	/**
+	 * @brief Text Block to display Login Status 
+	 */
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* T_LoginStatus;
 	
 	/**
 	 * @brief Instantiate all casting to the main menu HUD
 	 */
 	ATutorialMenuHUD* TutorialMenuHUD;
+
+	/**
+	* @brief Logging in with launcher
+	*/
+	void LauncherLogin();
 
 	/**
 	 * @brief Logging in with steam
@@ -71,14 +76,14 @@ public:
 	* otherwise configured.
 	*/
 	UFUNCTION()
-	void OnClickLoginButton();
+	void OnLoginButtonClicked();
 
 	/**
 	* @brief Logout a session using the AccelByte SDK. This is executed automatically on component construction unless
 	* otherwise configured.
 	*/
 	UFUNCTION()
-	void OnClickLogoutButton();
+	void OnLogoutButtonClicked();
 
 private:
 	
@@ -94,8 +99,9 @@ private:
 	*
 	* @param ErrorCode error code HTTP request. e.g 404.
 	* @param ErrorMessage error message HTTP request. e.g Unauthorized.
+	* @param ErrorJson error message for OAuth
 	*/
-	void LoginFailed(int32 ErrorCode, const FString& ErrorMessage);
+	void LoginFailed(int32 ErrorCode, const FString& ErrorMessage, const FJsonObject& ErrorJson);
 
 	/**
 	* @brief Function behaviour when Logout success. This function called inside AccelByte Logout OnSuccess

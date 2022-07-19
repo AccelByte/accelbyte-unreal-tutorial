@@ -12,7 +12,6 @@
 #include "Core/AccelByteRegistry.h"
 #include "Models/AccelByteAgreementModels.h"
 #include "TutorialProject/TutorialMenuHUD.h"
-#include "TutorialProject/TutorialProjectUtilities.h"
 
 void UAccelByteLegalDocument::InitLegal()
 {
@@ -23,9 +22,9 @@ void UAccelByteLegalDocument::InitLegal()
 
 	const FString Locale = FInternationalization::Get().GetCurrentLocale()->GetTwoLetterISOLanguageName();
 
-	FRegistry::Agreement.QueryLegalEligibilities(FRegistry::Credentials.GetNamespace(), THandler<TArray<FAccelByteModelsRetrieveUserEligibilitiesResponse>>::CreateLambda([this, Locale](const TArray<FAccelByteModelsRetrieveUserEligibilitiesResponse>& Result)
+	FRegistry::Agreement.QueryLegalEligibilities(FRegistry::Credentials.GetNamespace(), THandler<TArray<FAccelByteModelsRetrieveUserEligibilitiesResponse>>::CreateWeakLambda(this, [this, Locale](const TArray<FAccelByteModelsRetrieveUserEligibilitiesResponse>& Result)
 	{
-		for (const FAccelByteModelsRetrieveUserEligibilitiesResponse Policy : Result)
+		for (const FAccelByteModelsRetrieveUserEligibilitiesResponse& Policy : Result)
 		{
 			if (!Policy.IsAccepted && (Policy.Namespace == FRegistry::Settings.Namespace || Policy.Namespace == FRegistry::Settings.PublisherNamespace))
 			{
@@ -34,7 +33,7 @@ void UAccelByteLegalDocument::InitLegal()
 					continue;
 				}
 						
-				for (const FAccelByteModelsPolicyVersionWithLocalizedVersionObject PolicyVersion : Policy.PolicyVersions)
+				for (const FAccelByteModelsPolicyVersionWithLocalizedVersionObject& PolicyVersion : Policy.PolicyVersions)
 				{
 					if (!PolicyVersion.IsInEffect)
 					{
@@ -43,7 +42,7 @@ void UAccelByteLegalDocument::InitLegal()
 
 					// Find Localized Policy based on Player's Current Language
 					FAccelByteModelsLocalizedPolicyVersionObject FindLocalizedPolicy;
-					for (const FAccelByteModelsLocalizedPolicyVersionObject LocalizedPolicy : PolicyVersion.LocalizedPolicyVersions)
+					for (const FAccelByteModelsLocalizedPolicyVersionObject& LocalizedPolicy : PolicyVersion.LocalizedPolicyVersions)
 					{
 						if (Locale == LocalizedPolicy.LocaleCode)
 						{
@@ -85,11 +84,11 @@ void UAccelByteLegalDocument::InitLegal()
 			this->AddToViewport();
 		}
 
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString::Printf(TEXT("Query Legal Eligibilities Success, Total Legal That Require to Accept: %d"), RequiredDocs.Num()));
+		UE_LOG(LogTemp, Log, TEXT("Query Legal Eligibilities Success, Total Legal That Require to Accept: %d"), RequiredDocs.Num());
 	}),
-	FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+	FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Query Legal Eligibilities Failed, Error Code: %d, Error Message: %s"), ErrorCode, *ErrorMessage));
+		UE_LOG(LogTemp, Error, TEXT("Query Legal Eligibilities Failed, Error Code: %d, Error Message: %s"), ErrorCode, *ErrorMessage);
 	}));
 }
 
@@ -97,9 +96,9 @@ void UAccelByteLegalDocument::ShowLegalDocument()
 {
 	WS_LegalDocument->SetActiveWidgetIndex(0);
 
-	FRegistry::Agreement.GetLegalDocument(RequiredDocs[LegalState].DocumentUrl, THandler<FString>::CreateLambda([this](const FString& Result)
+	FRegistry::Agreement.GetLegalDocument(RequiredDocs[LegalState].DocumentUrl, THandler<FString>::CreateWeakLambda(this, [this](const FString& Result)
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Success Get Legal Document"));
+		UE_LOG(LogTemp, Log, TEXT("Success Get Legal Document"));
 		
 		WS_LegalDocument->SetActiveWidgetIndex(1);
 		
@@ -114,9 +113,10 @@ void UAccelByteLegalDocument::ShowLegalDocument()
 		Btn_Submit->OnClicked.AddUniqueDynamic(this, &UAccelByteLegalDocument::OnSubmitButtonClicked);
 		Cb_Agreement->OnCheckStateChanged.AddUniqueDynamic(this, &UAccelByteLegalDocument::OnCheckedLegalChanged);
 	}),
-	FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+	FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Get Legal Document Failed, Error Code: %d ErrorMessage: %s"), ErrorCode, *ErrorMessage));
+		UE_LOG(LogTemp, Error, TEXT("Get Legal Document Failed, Error Code: %d ErrorMessage: %s"), ErrorCode, *ErrorMessage);
+
 	}));
 }
 
@@ -130,7 +130,7 @@ void UAccelByteLegalDocument::OnSubmitButtonClicked()
 		WS_LegalDocument->SetActiveWidgetIndex(0);
 
 		TArray<FAccelByteModelsAcceptAgreementRequest> AgreementRequests;
-		for (const FRequiredDocument RequiredDoc : RequiredDocs)
+		for (const FRequiredDocument& RequiredDoc : RequiredDocs)
 		{
 			FAccelByteModelsAcceptAgreementRequest AgreementRequest;
 			AgreementRequest.IsAccepted = true;
@@ -141,28 +141,28 @@ void UAccelByteLegalDocument::OnSubmitButtonClicked()
 			AgreementRequests.Add(AgreementRequest);
 		}
 		
-		FRegistry::Agreement.BulkAcceptPolicyVersions(AgreementRequests, THandler<FAccelByteModelsAcceptAgreementResponse>::CreateLambda([this](const FAccelByteModelsAcceptAgreementResponse& Result)
+		FRegistry::Agreement.BulkAcceptPolicyVersions(AgreementRequests, THandler<FAccelByteModelsAcceptAgreementResponse>::CreateWeakLambda(this, [this](const FAccelByteModelsAcceptAgreementResponse& Result)
 		{
 			if (Result.Proceed)
 			{
-				TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Success Bulk Accept Policy Version"));
+				UE_LOG(LogTemp, Log, TEXT("Success Bulk Accept Policy Version"));
 
-				FRegistry::User.LoginWithRefreshToken(FVoidHandler::CreateLambda([this]()
+				FRegistry::User.LoginWithRefreshToken(FVoidHandler::CreateWeakLambda(this, [this]()
 				{
-					TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Success Login With Refresh Token"));
+					UE_LOG(LogTemp, Log, TEXT("Success Login With Refresh Token"));
 
 					RemoveFromParent();
 					TutorialMenuHUD->InitGameSettings();
 				}),
-				FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+				FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 				{
-					TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString::Printf(TEXT("Login With Refresh Token Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage));
+					UE_LOG(LogTemp, Error, TEXT("Login With Refresh Token Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 				}));
 			}
 		}),
-		FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+		FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 		{
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Bulk Accept Policy Versions Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage));
+			UE_LOG(LogTemp, Error, TEXT("Bulk Accept Policy Versions Failed, Error Code: %d Error Message: %s"), ErrorCode, *ErrorMessage);
 		}));
 	}
 	else

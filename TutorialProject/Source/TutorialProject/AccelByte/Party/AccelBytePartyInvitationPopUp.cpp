@@ -3,18 +3,24 @@
 // and restrictions contact your company contract manager.
 
 #include "AccelBytePartyInvitationPopUp.h"
+
+#include "AccelByteParty.h"
 #include "Api/AccelByteLobbyApi.h"
 #include "Components/Button.h"
 #include "Core/AccelByteRegistry.h"
 #include "TutorialProject/TutorialMenuHUD.h"
-#include "TutorialProject/TutorialProjectUtilities.h"
 #include "TutorialProject/AccelByte/Chat/AccelByteChat.h"
 #include "TutorialProject/AccelByte/Chat/AccelByteChatTab.h"
+
+#pragma region Initialization
 
 void UAccelBytePartyInvitationPopUp::NativeConstruct()
 {
 	Super::NativeConstruct();
 
+	Btn_AcceptParty->SetIsEnabled(true);
+	Btn_RejectParty->SetIsEnabled(true);
+	
 	TutorialMenuHUD = Cast<ATutorialMenuHUD>(GetOwningPlayer()->GetHUD());
 	
 	Btn_AcceptParty->OnClicked.AddUniqueDynamic(this, &UAccelBytePartyInvitationPopUp::OnClickedAcceptPartyInvitation);
@@ -26,43 +32,52 @@ void UAccelBytePartyInvitationPopUp::InitData(const FAccelByteModelsPartyGetInvi
 	InvitationData = Result;
 }
 
+#pragma endregion
+
+#pragma region Widget Callbacks
+
 void UAccelBytePartyInvitationPopUp::OnClickedAcceptPartyInvitation()
 {
-	FRegistry::Lobby.SetInvitePartyJoinResponseDelegate(Api::Lobby::FPartyJoinResponse::CreateUObject(this, &UAccelBytePartyInvitationPopUp::OnInvitePartyAcceptResponse));
+	Btn_AcceptParty->SetIsEnabled(false);
+	FRegistry::Lobby.SetInvitePartyJoinResponseDelegate(Api::Lobby::FPartyJoinResponse::CreateWeakLambda(this, [this](const FAccelByteModelsPartyJoinResponse& Result)
+	{
+		UE_LOG(LogTemp, Log, TEXT("Accept Party Success! Member : %d"), Result.Members.Num());
+		
+		TutorialMenuHUD->GetChatMenu()->DeleteTabButtonWidget(EChatTabType::Party);
+		TutorialMenuHUD->GetChatMenu()->CreateTabButtonWidget(EChatTabType::Party);
+		
+		RemoveFromParent();
+	}),
+	FErrorHandler::CreateWeakLambda(this, [this](const int32 ErrorCode, const FString& ErrorMessage)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Accept Party Error! %d: %s"), ErrorCode, *ErrorMessage);
+		
+		TutorialMenuHUD->GetPartyMenu()->ResetPartyInfo();
+		TutorialMenuHUD->GetChatMenu()->DeleteTabButtonWidget(EChatTabType::Party);
+		
+		RemoveFromParent();
+	}));
+	
 	FRegistry::Lobby.SendAcceptInvitationRequest(InvitationData.PartyId, InvitationData.InvitationToken);
 }
 
 void UAccelBytePartyInvitationPopUp::OnClickedRejectPartyInvitation()
 {
-	FRegistry::Lobby.SetInvitePartyRejectResponseDelegate(Api::Lobby::FPartyRejectResponse::CreateUObject(this, &UAccelBytePartyInvitationPopUp::OnInvitePartyRejectResponse));  
+	Btn_RejectParty->SetIsEnabled(false);
+	FRegistry::Lobby.SetInvitePartyRejectResponseDelegate(Api::Lobby::FPartyRejectResponse::CreateWeakLambda(this, [this](const FAccelByteModelsPartyRejectResponse& Result)
+	{
+		UE_LOG(LogTemp, Log, TEXT("Reject Party Success!"));
+		
+		RemoveFromParent();
+	}),
+	FErrorHandler::CreateWeakLambda(this, [this](const int32 ErrorCode, const FString& ErrorMessage)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Reject Party Error! %d: %s"), ErrorCode, *ErrorMessage);
+		
+		RemoveFromParent();
+	}));
+	
 	FRegistry::Lobby.SendRejectInvitationRequest(InvitationData.PartyId, InvitationData.InvitationToken);
 }
 
-void UAccelBytePartyInvitationPopUp::OnInvitePartyAcceptResponse(const FAccelByteModelsPartyJoinReponse& Result)
-{
-	if (Result.Code == "0")  
-	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString::Printf(TEXT("Accept Party Success! Member : %d"), Result.Members.Num()));
-		
-		TutorialMenuHUD->GetChatMenu()->DeleteTabButtonWidget(EChatTabType::Party);
-		TutorialMenuHUD->GetChatMenu()->CreateTabButtonWidget(EChatTabType::Party);
-	}
-	else
-	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Accept Party Error!")));
-	}
-	this->RemoveFromParent();
-}
-
-void UAccelBytePartyInvitationPopUp::OnInvitePartyRejectResponse(const FAccelByteModelsPartyRejectResponse& Result)
-{
-	if (Result.Code == "0")  
-	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, FString::Printf(TEXT("Reject Party Success!")));
-	}
-	else
-	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Reject Party Failed!")));
-	}
-	this->RemoveFromParent();
-}
+#pragma endregion

@@ -23,19 +23,30 @@ void UAccelByteFriends::NativeConstruct()
 	TutorialMenuHUD = Cast<ATutorialMenuHUD>(GetOwningPlayer()->GetHUD());
 	
 	Btn_FindFriend->OnClicked.AddUniqueDynamic(this, &UAccelByteFriends::OnClickedFindFriend);
-	Btn_FriendList->OnClicked.AddUniqueDynamic(this, &UAccelByteFriends::OnClickedFriendList);
-	Btn_PendingIncomingList->OnClicked.AddUniqueDynamic(this, &UAccelByteFriends::OnClickedPendingIncomingList);
-	Btn_PendingSentList->OnClicked.AddUniqueDynamic(this, &UAccelByteFriends::OnClickedPendingOutgoingList);
-	Btn_BlockList->OnClicked.AddUniqueDynamic(this, &UAccelByteFriends::OnClickedBlockList);
+	Btn_FriendList->OnClicked.AddUniqueDynamic(this, &UAccelByteFriends::LoadFriendList);
+	Btn_PendingIncomingList->OnClicked.AddUniqueDynamic(this, &UAccelByteFriends::LoadPendingIncomingList);
+	Btn_PendingSentList->OnClicked.AddUniqueDynamic(this, &UAccelByteFriends::LoadPendingOutgoingList);
+	Btn_BlockList->OnClicked.AddUniqueDynamic(this, &UAccelByteFriends::LoadBlockFriendsList);
 	Btn_Back->OnClicked.AddUniqueDynamic(this, &UAccelByteFriends::OnClickedBackToLobby);
 
 	SetNotificationDelegate();
+	CurrentState = ECurrentStateFriend::FRIEND_LIST;
+	RefreshFriendsList();
+}
+
+void UAccelByteFriends::SwitchActiveButton(UButton* CurrentButton)
+{
+	if (!CurrentActiveButton) CurrentActiveButton = CurrentButton;
+	
+	CurrentActiveButton->SetBackgroundColor(FLinearColor::White);
+	CurrentActiveButton = CurrentButton;
+	CurrentActiveButton->SetBackgroundColor(TutorialProjectUtilities::SelectedTabGreyColor);
 }
 
 void UAccelByteFriends::SetNotificationDelegate()
 {
 	FRegistry::Lobby.SetOnFriendRequestAcceptedNotifDelegate(
-		Lobby::FAcceptFriendsNotif::CreateLambda([this](const FAccelByteModelsAcceptFriendsNotif& Result)
+		Api::Lobby::FAcceptFriendsNotif::CreateWeakLambda(this, [this](const FAccelByteModelsAcceptFriendsNotif& Result)
 		{
 			if (CurrentState == ECurrentStateFriend::FRIEND_LIST)
 			{
@@ -48,7 +59,7 @@ void UAccelByteFriends::SetNotificationDelegate()
 		}));
 		
 	FRegistry::Lobby.SetOnUnfriendNotifDelegate(
-		Lobby::FUnfriendNotif::CreateLambda([this](const FAccelByteModelsUnfriendNotif& Result)
+		Api::Lobby::FUnfriendNotif::CreateWeakLambda(this, [this](const FAccelByteModelsUnfriendNotif& Result)
 		{
 			if (CurrentState == ECurrentStateFriend::FRIEND_LIST)
 			{
@@ -57,18 +68,18 @@ void UAccelByteFriends::SetNotificationDelegate()
 			
 			FRegistry::User.GetUserByUserId(
 				Result.friendId,
-				THandler<FSimpleUserData>::CreateLambda([this](const FSimpleUserData& UserData)
+				THandler<FSimpleUserData>::CreateWeakLambda(this, [this](const FSimpleUserData& UserData)
 				{
 					TutorialMenuHUD->GetChatMenu()->DeleteTabButtonWidget(EChatTabType::Private, UserData.UserId);
 				}),
-				FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+				FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 				{
-					TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Friend| Failed Getting User Id. %d: %s"), ErrorCode, *ErrorMessage));
+					UE_LOG(LogTemp, Error, TEXT("Friend| Failed Getting User Id. %d: %s"), ErrorCode, *ErrorMessage);
 				}));
 		}));
 	
 	FRegistry::Lobby.SetOnCancelFriendsNotifDelegate(
-		Lobby::FCancelFriendsNotif::CreateLambda([this](const FAccelByteModelsCancelFriendsNotif& Result)
+		Api::Lobby::FCancelFriendsNotif::CreateWeakLambda(this, [this](const FAccelByteModelsCancelFriendsNotif& Result)
 		{
 			if (CurrentState == ECurrentStateFriend::INCOMING_LIST)
 			{
@@ -77,7 +88,7 @@ void UAccelByteFriends::SetNotificationDelegate()
 		}));
 	
 	FRegistry::Lobby.SetOnRejectFriendsNotifDelegate(
-		Lobby::FRejectFriendsNotif::CreateLambda([this](const FAccelByteModelsRejectFriendsNotif& Result)
+		Api::Lobby::FRejectFriendsNotif::CreateWeakLambda(this, [this](const FAccelByteModelsRejectFriendsNotif& Result)
 		{
 			if (CurrentState == ECurrentStateFriend::OUTGOING_LIST)
 			{
@@ -86,7 +97,7 @@ void UAccelByteFriends::SetNotificationDelegate()
 		}));
 	
 	FRegistry::Lobby.SetOnIncomingRequestFriendsNotifDelegate(
-		Lobby::FRequestFriendsNotif::CreateLambda([this](const FAccelByteModelsRequestFriendsNotif& Result)
+		Api::Lobby::FRequestFriendsNotif::CreateWeakLambda(this, [this](const FAccelByteModelsRequestFriendsNotif& Result)
 		{
 			if (CurrentState == ECurrentStateFriend::INCOMING_LIST)
 			{
@@ -95,7 +106,7 @@ void UAccelByteFriends::SetNotificationDelegate()
 		}));
 
 	FRegistry::Lobby.SetBlockPlayerNotifDelegate(
-		Lobby::FBlockPlayerNotif::CreateLambda([this](const FAccelByteModelsBlockPlayerNotif& Result)
+		Api::Lobby::FBlockPlayerNotif::CreateWeakLambda(this, [this](const FAccelByteModelsBlockPlayerNotif& Result)
 		{
 			if (CurrentState == ECurrentStateFriend::FRIEND_LIST)
 			{
@@ -104,7 +115,7 @@ void UAccelByteFriends::SetNotificationDelegate()
 		}));
 
 	FRegistry::Lobby.SetUserPresenceNotifDelegate(
-		Lobby::FFriendStatusNotif::CreateLambda([this](const FAccelByteModelsUsersPresenceNotice& Result)
+		Api::Lobby::FFriendStatusNotif::CreateWeakLambda(this, [this](const FAccelByteModelsUsersPresenceNotice& Result)
 		{
 			for (const TWeakObjectPtr<UAccelByteFriendEntry>& WidgetEntry : FriendListWidgets)
 			{
@@ -115,7 +126,34 @@ void UAccelByteFriends::SetNotificationDelegate()
 			}
 		}));
 	
-	FRegistry::Lobby.SetGetOnlineFriendsPresenceResponseDelegate(Lobby::FGetAllFriendsStatusResponse::CreateUObject(this, &UAccelByteFriends::OnGetFriendsPresenceResponse));
+	FRegistry::Lobby.SetGetOnlineFriendsPresenceResponseDelegate(Api::Lobby::FGetAllFriendsStatusResponse::CreateUObject(this, &UAccelByteFriends::OnGetFriendsPresenceResponse));
+}
+
+void UAccelByteFriends::RefreshFriendsList()
+{
+	switch (CurrentState)
+	{
+		case ECurrentStateFriend::FRIEND_LIST:
+			{
+				LoadFriendList();
+				break;
+			}
+		case ECurrentStateFriend::INCOMING_LIST:
+			{
+				LoadPendingIncomingList();
+				break;
+			}
+		case ECurrentStateFriend::OUTGOING_LIST:
+			{
+				LoadPendingOutgoingList();
+				break;
+			}
+		case ECurrentStateFriend::BLOCKED_LIST:
+			{
+				LoadBlockFriendsList();
+				break;
+			}
+	}
 }
 
 void UAccelByteFriends::OnClickedFindFriend()
@@ -123,39 +161,47 @@ void UAccelByteFriends::OnClickedFindFriend()
 	TutorialMenuHUD->OpenFindFriendsMenu();
 }
 
-void UAccelByteFriends::OnClickedFriendList()
-{	
+void UAccelByteFriends::LoadFriendList()
+{
+	SwitchActiveButton(Btn_FriendList);
+	
 	Sb_ContentList->ClearChildren();
 	CurrentState = ECurrentStateFriend::FRIEND_LIST;
 	
-	FRegistry::Lobby.SetLoadFriendListResponseDelegate(Lobby::FLoadFriendListResponse::CreateUObject(this, &UAccelByteFriends::OnLoadFriendListResponse));
+	FRegistry::Lobby.SetLoadFriendListResponseDelegate(Api::Lobby::FLoadFriendListResponse::CreateUObject(this, &UAccelByteFriends::OnLoadFriendListResponse));
 	FRegistry::Lobby.LoadFriendsList();
 }
 
-void UAccelByteFriends::OnClickedPendingIncomingList()
-{	
+void UAccelByteFriends::LoadPendingIncomingList()
+{
+	SwitchActiveButton(Btn_PendingIncomingList);
+	
 	Sb_ContentList->ClearChildren();
 	CurrentState = ECurrentStateFriend::INCOMING_LIST;
 	
-	FRegistry::Lobby.SetListIncomingFriendsResponseDelegate(Lobby::FListIncomingFriendsResponse::CreateUObject(this, &UAccelByteFriends::OnListIncomingFriendResponse));
+	FRegistry::Lobby.SetListIncomingFriendsResponseDelegate(Api::Lobby::FListIncomingFriendsResponse::CreateUObject(this, &UAccelByteFriends::OnListIncomingFriendResponse));
 	FRegistry::Lobby.ListIncomingFriends();
 }
 
-void UAccelByteFriends::OnClickedPendingOutgoingList()
-{	
+void UAccelByteFriends::LoadPendingOutgoingList()
+{
+	SwitchActiveButton(Btn_PendingSentList);
+	
 	Sb_ContentList->ClearChildren();
 	CurrentState = ECurrentStateFriend::OUTGOING_LIST;
 	
-	FRegistry::Lobby.SetListOutgoingFriendsResponseDelegate(Lobby::FListOutgoingFriendsResponse::CreateUObject(this, &UAccelByteFriends::OnListOutgoingFriendResponse));
+	FRegistry::Lobby.SetListOutgoingFriendsResponseDelegate(Api::Lobby::FListOutgoingFriendsResponse::CreateUObject(this, &UAccelByteFriends::OnListOutgoingFriendResponse));
 	FRegistry::Lobby.ListOutgoingFriends();
 }
 
-void UAccelByteFriends::OnClickedBlockList()
-{	
+void UAccelByteFriends::LoadBlockFriendsList()
+{
+	SwitchActiveButton(Btn_BlockList);
+	
 	Sb_ContentList->ClearChildren();
 	CurrentState = ECurrentStateFriend::BLOCKED_LIST;
 	
-	FRegistry::Lobby.GetListOfBlockedUsers(Lobby::FListBlockedUserResponse::CreateUObject(this, &UAccelByteFriends::OnSuccessRetrieveListBlockedUser),
+	FRegistry::Lobby.GetListOfBlockedUsers(Api::Lobby::FListBlockedUserResponse::CreateUObject(this, &UAccelByteFriends::OnSuccessRetrieveListBlockedUser),
 		FErrorHandler::CreateUObject(this, &UAccelByteFriends::OnFailedRetrieveListBlockedUser));
 }
 
@@ -168,16 +214,16 @@ void UAccelByteFriends::OnGetFriendsPresenceResponse(const FAccelByteModelsGetOn
 {
 	if (Result.Code == "0")
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Success retrieve user presences!"));
+		UE_LOG(LogTemp, Log, TEXT("Success retrieve user presences!"));
 
-		for (int Index = 0 ; Index < FriendListWidgets.Num()-1 ; ++Index)
+		for (int Index = 0 ; Index < FriendListWidgets.Num() ; ++Index)
 		{
-			SetUserPresence(FriendListWidgets[Index], Result.availability[Index]);
+			SetUserPresence(FriendListWidgets[Index], Result.availability.Num() > Index ? Result.availability[Index] : "0");
 		}
 	}
 	else
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("Unable to retrieve user presences!"));
+		UE_LOG(LogTemp, Error, TEXT("Unable to retrieve user presences!"));
 	}
 }
 
@@ -188,7 +234,7 @@ void UAccelByteFriends::OnLoadFriendListResponse(const FAccelByteModelsLoadFrien
 	
 	if (Result.Code == "0")  
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Success Retrieve Load Friend List Response!"));
+		UE_LOG(LogTemp, Log, TEXT("Success Retrieve Load Friend List Response!"));
 
 		for (const FString& FriendId : Result.friendsId)  
 		{
@@ -199,7 +245,7 @@ void UAccelByteFriends::OnLoadFriendListResponse(const FAccelByteModelsLoadFrien
 	}
 	else
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("Unable to retrieve the your friends list!"));
+		UE_LOG(LogTemp, Error, TEXT("Unable to retrieve the your friends list!"));
 	}
 }
 
@@ -211,7 +257,7 @@ void UAccelByteFriends::OnListIncomingFriendResponse(const FAccelByteModelsListI
 
 	if (Result.Code == "0")  
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Success Retrieve List Incoming Friend Response!"));
+		UE_LOG(LogTemp, Log, TEXT("Success Retrieve List Incoming Friend Response!"));
 		
 		for (const FString& FriendId : Result.friendsId)  
 		{
@@ -220,7 +266,7 @@ void UAccelByteFriends::OnListIncomingFriendResponse(const FAccelByteModelsListI
 	}
 	else  
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("Unable to retrieve the list of incoming friend requests!"));
+		UE_LOG(LogTemp, Error, TEXT("Unable to retrieve the list of incoming friend requests!"));
 	}
 }
 
@@ -231,7 +277,7 @@ void UAccelByteFriends::OnListOutgoingFriendResponse(const FAccelByteModelsListO
 
 	if (Result.Code == "0")  
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Success Retrieve List Outgoing Friend Response!"));
+		UE_LOG(LogTemp, Log, TEXT("Success Retrieve List Outgoing Friend Response!"));
 		
 		for (const FString& FriendId : Result.friendsId)  
 		{
@@ -240,7 +286,7 @@ void UAccelByteFriends::OnListOutgoingFriendResponse(const FAccelByteModelsListO
 	}
 	else
 	{
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, TEXT("Unable to retrieve the list of outgoing friend requests!"));
+		UE_LOG(LogTemp, Error, TEXT("Unable to retrieve the list of outgoing friend requests!"));
 	}  
 }
 
@@ -249,7 +295,7 @@ void UAccelByteFriends::OnSuccessRetrieveListBlockedUser(const FAccelByteModelsL
 	Sb_ContentList->ClearChildren();
 	FriendListWidgets.Empty();
 
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, TEXT("Success Retrieve List Blocked User!"));
+	UE_LOG(LogTemp, Log, TEXT("Success Retrieve List Blocked User!"));
 
 	for (const FBlockedData& BlockedData : Result.Data)  
 	{
@@ -259,7 +305,7 @@ void UAccelByteFriends::OnSuccessRetrieveListBlockedUser(const FAccelByteModelsL
 
 void UAccelByteFriends::OnFailedRetrieveListBlockedUser(int32 ErrorCode, const FString& ErrorMessage)
 {
-	TutorialProjectUtilities::ShowLog(ELogVerbosity::Error, FString::Printf(TEXT("Failed to Retrieve Blocked Users List : %d , %s"), ErrorCode, *ErrorMessage));
+	UE_LOG(LogTemp, Error, TEXT("Failed to Retrieve Blocked Users List : %d , %s"), ErrorCode, *ErrorMessage);
 }
 
 void UAccelByteFriends::CreateEntryWidget(const EFriendEntryMode& EntryMode, const FString& FriendId)

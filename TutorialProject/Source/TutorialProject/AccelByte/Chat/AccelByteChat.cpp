@@ -13,7 +13,6 @@
 #include "Components/ScrollBox.h"
 #include "Components/VerticalBox.h"
 #include "Core/AccelByteRegistry.h"
-#include "TutorialProject/TutorialProjectUtilities.h"
 
 #pragma region Initialization
 
@@ -21,10 +20,20 @@ void UAccelByteChat::NativeConstruct()
 {
 	Super::NativeConstruct();
 	
+	
 	SetWidgetCallbacks();
 	SetNotificationDelegates();
 	
 	ResetChatComponents();
+
+	SetDefaultGlobalTabMessage();
+}
+
+void UAccelByteChat::SetDefaultGlobalTabMessage()
+{
+	CurrentChatTab = EChatTabType::Global;
+	CreateTabButtonWidget(EChatTabType::Global);
+	TabButtonsArray[CurrentTabIndex]->OnClickedChatTabButton();
 }
 
 void UAccelByteChat::SetWidgetCallbacks()
@@ -40,13 +49,9 @@ void UAccelByteChat::SetNotificationDelegates()
 {
 	// On Joined Global Chat
 	FRegistry::Lobby.SetJoinChannelChatResponseDelegate(
-		Lobby::FJoinDefaultChannelChatResponse::CreateLambda([this](const FAccelByteModelsJoinDefaultChannelResponse& Result)
+		Api::Lobby::FJoinDefaultChannelChatResponse::CreateWeakLambda(this, [this](const FAccelByteModelsJoinDefaultChannelResponse& Result)
 		{
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Log, "Chat| Successfully joined Global Channel!");
-			
-			CurrentChatTab = EChatTabType::Global;
-			CreateTabButtonWidget(EChatTabType::Global);
-			TabButtonsArray[CurrentTabIndex]->OnClickedChatTabButton();
+			UE_LOG(LogTemp, Log, TEXT("Chat| Successfully joined Global Channel!"));
 			
 			const FString JoinInfo = FString::Printf(TEXT("You have joined [%s]."), *Result.ChannelSlug);
 			AddMessageToArray(EChatTabType::Global, JoinInfo);
@@ -55,23 +60,23 @@ void UAccelByteChat::SetNotificationDelegates()
 	
 	// Receive global chat notification
 	FRegistry::Lobby.SetChannelMessageNotifDelegate(
-		Lobby::FChannelChatNotif::CreateLambda([this](const FAccelByteModelsChannelMessageNotice& Result)
+		Api::Lobby::FChannelChatNotif::CreateWeakLambda(this, [this](const FAccelByteModelsChannelMessageNotice& Result)
 		{
 			ReceiveChatMessage(EChatTabType::Global, Result.From, Result.Payload, Result.ChannelSlug);
 		}));
 	
 	// Receive party chat notification
 	FRegistry::Lobby.SetPartyChatNotifDelegate(
-		Lobby::FPartyChatNotif::CreateLambda([this](const FAccelByteModelsPartyMessageNotice& Result)
+		Api::Lobby::FPartyChatNotif::CreateWeakLambda(this, [this](const FAccelByteModelsPartyMessageNotice& Result)
 		{
 			ReceiveChatMessage(EChatTabType::Party, Result.From, Result.Payload);
 		}));
 	
 	// Receive private chat notification
 	FRegistry::Lobby.SetPrivateMessageNotifDelegate(
-		Lobby::FPersonalChatNotif::CreateLambda([this](const FAccelByteModelsPersonalMessageNotice& Result)
+		Api::Lobby::FPersonalChatNotif::CreateWeakLambda(this, [this](const FAccelByteModelsPersonalMessageNotice& Result)
 		{
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Type::Log, FString("Chat| Private Message Received"));
+			UE_LOG(LogTemp, Log, TEXT("Chat| Private Message Received"));
 			if (PrivateTabButtonsMap.Contains(FName(Result.From)))
 			{
 				ReceiveChatMessage(EChatTabType::Private, Result.From, Result.Payload);
@@ -80,15 +85,14 @@ void UAccelByteChat::SetNotificationDelegates()
 			{
 				FRegistry::User.GetUserByUserId(
 					Result.From,
-					THandler<FSimpleUserData>::CreateLambda([this, Result](const FSimpleUserData& UserData)
+					THandler<FSimpleUserData>::CreateWeakLambda(this, [this, Result](const FSimpleUserData& UserData)
 					{
 						CreateTabButtonWidget(EChatTabType::Private, UserData);
 						ReceiveChatMessage(EChatTabType::Private, Result.From, Result.Payload);
 					}),
-					FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+					FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 					{
-						TutorialProjectUtilities::ShowLog(ELogVerbosity::Error,
-							FString::Printf(TEXT("Chat| Failed Getting User Data! %d: %s"), ErrorCode, *ErrorMessage));
+						UE_LOG(LogTemp, Error, TEXT("Chat| Failed Getting User Data! %d: %s"), ErrorCode, *ErrorMessage);
 					}));
 			}
 		}));
@@ -108,11 +112,24 @@ void UAccelByteChat::CreateTabButtonWidget(const EChatTabType& ChatTabType, cons
 		return;
 	}
 	
-	UAccelByteChatTab* ChatTabWidget = CreateWidget<UAccelByteChatTab>(this, *AccelByteChatTabClass);
+	// Check if tab button already have a global or party chats
+	if (ChatTabType == EChatTabType::Global || ChatTabType == EChatTabType::Party)
+	{
+		for (const UAccelByteChatTab* ChatTab : TabButtonsArray)
+		{
+			if (ChatTab->TabButtonType == ChatTabType)
+			{
+				return;
+			}
+		}
+	}
 	
+	UAccelByteChatTab* ChatTabWidget = CreateWidget<UAccelByteChatTab>(this, *AccelByteChatTabClass);
+
+	ChatTabWidget->InitData(this, ChatTabType, UserData);
+	ChatTabWidget->SetButtonColorState(EChatTabState::Normal);
 	if (ChatTabType == EChatTabType::Private)
 	{
-		ChatTabWidget->InitData(this, ChatTabType, UserData);
 		ChatTabWidget->SetButtonColorState(EChatTabState::Unread);
 		
 		// Add Widget to Array in Private Buttons Map.
@@ -120,11 +137,6 @@ void UAccelByteChat::CreateTabButtonWidget(const EChatTabType& ChatTabType, cons
 			PrivateTabButtonsMap.Contains(UserId) ? PrivateTabButtonsMap.Find(UserId) : new TArray<UAccelByteChatTab*>;
 		PrivateTabs->Add(ChatTabWidget);
 		PrivateTabButtonsMap.Emplace(UserData.UserId, *PrivateTabs);
-	}
-	else
-	{
-		ChatTabWidget->InitData(this, ChatTabType);
-		ChatTabWidget->SetButtonColorState(EChatTabState::Normal);
 	}
 	
 	Sb_TabButtons->AddChild(ChatTabWidget);
@@ -135,26 +147,38 @@ void UAccelByteChat::DeleteTabButtonWidget(const EChatTabType& ChatTabType, cons
 {
 	for (int32 Index = 0; Index < TabButtonsArray.Num(); ++Index)
 	{
-		if (TabButtonsArray[Index]->TabButtonType == ChatTabType)
+		UAccelByteChatTab* CurrentTab = TabButtonsArray[Index];
+		if (CurrentTab->TabButtonType == ChatTabType)
 		{
 			if (ChatTabType == EChatTabType::Private)
 			{
-				if (UserId == TabButtonsArray[Index]->UserData.UserId)
+				if (UserId == CurrentTab->UserData.UserId)
 				{
+					// if current tab is deleted, then switch the tab to global
+					if (Index == CurrentTabIndex)
+					{
+						SwitchChatTab(EChatTabType::Global);
+					}
+					// if current tab is more than the current index that deleted, then decrement the current tab index
+					else if (Index < CurrentTabIndex)
+					{
+						CurrentTabIndex--;
+					}
+					
 					const FName PrivateUserId = FName(UserId);
 					
 					check(PrivateTabButtonsMap.Contains(PrivateUserId));
 					PrivateTabButtonsMap.Remove(PrivateUserId);
 					
-					Sb_TabButtons->RemoveChild(TabButtonsArray[Index]);
+					Sb_TabButtons->RemoveChild(CurrentTab);
 					TabButtonsArray.RemoveAt(Index);
 					break;
 				}
 			}
 			else
 			{
-				ChatContentMap.Remove(TabButtonsArray[Index]->TabButtonType);
-				Sb_TabButtons->RemoveChild(TabButtonsArray[Index]);
+				ChatContentMap.Remove(CurrentTab->TabButtonType);
+				Sb_TabButtons->RemoveChild(CurrentTab);
 				TabButtonsArray.RemoveAt(Index);
 				break;
 			}
@@ -265,8 +289,11 @@ void UAccelByteChat::SwitchChatTab(const EChatTabType& ChatTabType, const FStrin
 	
 	ChatEntriesArray.Empty();
 	Vb_ChatContent->ClearChildren();
-	
-	TabButtonsArray[CurrentTabIndex]->SetButtonColorState(EChatTabState::Normal);
+
+	if (TabButtonsArray.Num() > CurrentTabIndex)
+	{
+		TabButtonsArray[CurrentTabIndex]->SetButtonColorState(EChatTabState::Normal);
+	}
 	for (int32 TabIndex = 0; TabIndex < TabButtonsArray.Num(); ++TabIndex)
 	{
 		if (ChatTabType == EChatTabType::Private)
@@ -287,7 +314,7 @@ void UAccelByteChat::SwitchChatTab(const EChatTabType& ChatTabType, const FStrin
 	switch (ChatTabType)
 	{
 	case EChatTabType::Global:
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Type::Log, FString("Chat| Switched to Global chat"));
+		UE_LOG(LogTemp, Log, TEXT("Chat| Switched to Global chat"));
 		
 		if (ChatContentMap.Contains(EChatTabType::Global))
 		{
@@ -299,7 +326,7 @@ void UAccelByteChat::SwitchChatTab(const EChatTabType& ChatTabType, const FStrin
 		break;
 		
 	case EChatTabType::Party:
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Type::Log, FString("Chat| Switched to Party chat"));
+		UE_LOG(LogTemp, Log, TEXT("Chat| Switched to Party chat"));
 		
 		if (ChatContentMap.Contains(EChatTabType::Party))
 		{
@@ -311,7 +338,7 @@ void UAccelByteChat::SwitchChatTab(const EChatTabType& ChatTabType, const FStrin
 		break;
 		
 	case EChatTabType::Private:
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Type::Log, FString::Printf(TEXT("Chat| Switched to Private chat: %s"), *UserId));
+		UE_LOG(LogTemp, Log, TEXT("Chat| Switched to Private chat: %s"), *UserId);
 		
 		CurrentPrivateChatId = UserId;
 		
@@ -327,6 +354,8 @@ void UAccelByteChat::SwitchChatTab(const EChatTabType& ChatTabType, const FStrin
 	default:
 		break;
 	}
+	
+	Sb_Chat->ScrollToEnd();
 }
 
 void UAccelByteChat::SendChat(const FString& ChatMessage)
@@ -340,16 +369,16 @@ void UAccelByteChat::SendChat(const FString& ChatMessage)
 	switch (CurrentChatTab)
 	{
 	case EChatTabType::Global: 
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Type::Log, FString("Chat| Message sent to Global Chat"));
+		UE_LOG(LogTemp, Log, TEXT("Chat| Message sent to Global Chat"));
 		
 		FRegistry::Lobby.SendChannelMessage(ChatMessage);
 		break;
 		
 	case EChatTabType::Party:
 		{
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Type::Log, FString("Chat| Message sent to Party Chat"));
+			UE_LOG(LogTemp, Log, TEXT("Chat| Message sent to Party Chat"));
 			
-			const FString PartyMessage = FString::Printf(TEXT("[Party] Me> %s"), *ChatMessage);
+			const FString PartyMessage = FString::Printf(TEXT("[Party] %s: %s"), *FRegistry::Credentials.GetUserDisplayName(), *ChatMessage);
 			AddMessageToArray(EChatTabType::Party, PartyMessage);
 			
 			CreateChatEntryWidget(PartyMessage);
@@ -360,9 +389,9 @@ void UAccelByteChat::SendChat(const FString& ChatMessage)
 		
 	case EChatTabType::Private:
 		{
-			TutorialProjectUtilities::ShowLog(ELogVerbosity::Type::Log, FString::Printf(TEXT("Message sent to Private Chat: %s"), *CurrentPrivateChatId));
+			UE_LOG(LogTemp, Log, TEXT("Message sent to Private Chat: %s"), *CurrentPrivateChatId);
 			
-			const FString PrivateMessage = FString::Printf(TEXT("[Private] Me> %s"), *ChatMessage);
+			const FString PrivateMessage = FString::Printf(TEXT("[Private] %s: %s"), *FRegistry::Credentials.GetUserDisplayName(), *ChatMessage);
 			AddMessageToArray(EChatTabType::Private, PrivateMessage, CurrentPrivateChatId);
 			
 			CreateChatEntryWidget(PrivateMessage);
@@ -372,10 +401,11 @@ void UAccelByteChat::SendChat(const FString& ChatMessage)
 		break;
 		
 	default:
-		TutorialProjectUtilities::ShowLog(ELogVerbosity::Type::Error, FString("Chat| Unable to send message"));
+		UE_LOG(LogTemp, Error, TEXT("Chat| Unable to send message"));
 		break;
 	}
-		
+
+	Sb_Chat->ScrollToEnd();
 	Et_Chat->SetText(FText::FromString(""));
 }
 
@@ -389,17 +419,17 @@ void UAccelByteChat::ReceiveChatMessage(const EChatTabType& ChatTabType, const F
 		switch (ChatTabType)
 		{
 		case EChatTabType::Global:
-			MessageToShow = FString::Printf(TEXT("[%s] %s> %s"), *ChannelSlug, *DisplayNameMap[SenderId], *Payload);
+			MessageToShow = FString::Printf(TEXT("[%s] %s: %s"), *ChannelSlug, *DisplayNameMap[SenderId], *Payload);
 			AddMessageToArray(EChatTabType::Global, MessageToShow);
 			break;
 			
 		case EChatTabType::Party:
-			MessageToShow = FString::Printf(TEXT("[Party] %s> %s"), *DisplayNameMap[SenderId], *Payload);
+			MessageToShow = FString::Printf(TEXT("[Party] %s: %s"), *DisplayNameMap[SenderId], *Payload);
 			AddMessageToArray(EChatTabType::Party, MessageToShow);
 			break;
 			
 		case EChatTabType::Private:
-			MessageToShow = FString::Printf(TEXT("[Private] %s> %s"), *DisplayNameMap[SenderId], *Payload);
+			MessageToShow = FString::Printf(TEXT("[Private] %s: %s"), *DisplayNameMap[SenderId], *Payload);
 			AddMessageToArray(EChatTabType::Private, MessageToShow, UserId);
 			break;
 			
@@ -433,16 +463,15 @@ void UAccelByteChat::ReceiveChatMessage(const EChatTabType& ChatTabType, const F
 	{
 		FRegistry::User.GetUserByUserId(
 			UserId,
-			THandler<FSimpleUserData>::CreateLambda([this, ChatTabType, Payload, ChannelSlug](const FSimpleUserData& UserData)
+			THandler<FSimpleUserData>::CreateWeakLambda(this, [this, ChatTabType, Payload, ChannelSlug](const FSimpleUserData& UserData)
 			{
 				DisplayNameMap.Emplace(UserData.UserId, UserData.DisplayName);
 				
 				ReceiveChatMessage(ChatTabType, UserData.UserId, Payload, ChannelSlug);
 			}),
-			FErrorHandler::CreateLambda([](int32 ErrorCode, const FString& ErrorMessage)
+			FErrorHandler::CreateWeakLambda(this, [](int32 ErrorCode, const FString& ErrorMessage)
 			{
-				TutorialProjectUtilities::ShowLog(ELogVerbosity::Error,
-					FString::Printf(TEXT("Chat| Failed Getting User Data! %d: %s"), ErrorCode, *ErrorMessage));
+				UE_LOG(LogTemp, Error, TEXT("Chat| Failed Getting User Data! %d: %s"), ErrorCode, *ErrorMessage);
 			}));
 	}
 }
